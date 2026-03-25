@@ -1,0 +1,34 @@
+[gd_scene format=3 uid="uid://b1tg7j3oe6yfx"]
+
+[ext_resource type="Script" uid="uid://dyaac6py4fod0" path="res://scene/player/player.gd" id="1_cm2cf"]
+[ext_resource type="Texture2D" uid="uid://bwnacj0utwrhv" path="res://assets/player_picture/LS20260321164248.png" id="2_6smn3"]
+
+[node name="Player" type="CharacterBody2D" unique_id=982708415]
+scale = Vector2(0.1, 0.1)
+script = ExtResource("1_cm2cf")
+
+[node name="Visuals" type="Node2D" parent="." unique_id=2122118630]
+
+[node name="Head" type="Sprite2D" parent="Visuals" unique_id=1138904986]
+
+[node name="Body" type="Sprite2D" parent="Visuals" unique_id=1438702316]
+texture = ExtResource("2_6smn3")
+
+[node name="Weapon" type="Sprite2D" parent="Visuals" unique_id=543256958]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1111981497]
+
+[node name="UI" type="Node2D" parent="." unique_id=1858960236]
+
+[node name="NameLabel" type="Label" parent="UI" unique_id=2052567970]
+offset_left = -119.99999
+offset_top = -239.99998
+offset_right = 19.999977
+offset_bottom = -216.99998
+horizontal_alignment = 1
+
+[node name="HealthBar" type="ProgressBar" parent="UI" unique_id=100108495]
+offset_right = 4.0
+offset_bottom = 27.0
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1552094750]

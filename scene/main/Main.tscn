@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://ba61271ji4s2l"]
+
+[ext_resource type="Script" uid="uid://cneujasjm20m2" path="res://scene/main/main.gd" id="1_ngnri"]
+[ext_resource type="PackedScene" uid="uid://cs1dqywx0su7k" path="res://scene/map_arena/map_arena.tscn" id="2_kxuim"]
+[ext_resource type="PackedScene" uid="uid://bl3twfj16p1sg" path="res://scene/group_camera/group_camera.tscn" id="3_62xol"]
+
+[node name="Node2D" type="Node2D" unique_id=2001978325]
+script = ExtResource("1_ngnri")
+
+[node name="Map_Arena" parent="." unique_id=648806103 instance=ExtResource("2_kxuim")]
+
+[node name="GroupCamera" parent="." unique_id=98295495 instance=ExtResource("3_62xol")]

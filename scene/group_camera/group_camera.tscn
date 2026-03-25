@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://bl3twfj16p1sg"]
+
+[ext_resource type="Script" uid="uid://bf6x7vedx83hc" path="res://scene/group_camera/group_camera.gd" id="1_g5usg"]
+
+[node name="GroupCamera" type="Camera2D" unique_id=98295495]
+position_smoothing_enabled = true
+script = ExtResource("1_g5usg")

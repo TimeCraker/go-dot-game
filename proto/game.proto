@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+// 生成的 Go 代码所在的包名
+package proto;
+option go_package = "./proto";
+
+// 定义统一的消息包（替代之前的 GameMessage JSON）
+message GameMessage {
+    string type = 1;     // 消息类型: chat, move, init, leave, match_req, match_success
+    uint32 user_id = 2;  // 玩家 ID
+    string content = 3;  // 聊天内容
+    float x = 4;         // 坐标 X
+    float y = 5;         // 坐标 Y
+    float z = 6;         // 坐标 Z
+    
+    // 列表类型：用于同步历史记录或玩家列表
+    repeated PlayerPos players = 7;
+    repeated ChatLog history = 8;
+
+    // 修改内容：新增基于强类型的房间ID字段
+    // 修改原因：支持基于房间的物理隔离广播与对局，大厅聊天与房间隔离
+    string room_id = 9;
+
+    // ===== 新增代码 START =====
+    // 修改内容：新增朝向同步字段 rot_y，用于远端玩家丝滑旋转同步与多帧视觉稳定
+    // 修改原因：在 move 类消息中附带 transform.eulerAngles.y，避免远端旋转出现轻微卡顿
+    // 影响范围：仅影响 move/同步类消息；大厅未必填充该字段
+    float rot_y = 10;
+    // ===== 新增代码 END =====
+}
+
+message PlayerPos {
+    uint32 user_id = 1;
+    float x = 2;
+    float y = 3;
+    float z = 4;
+    float rot_y = 5;
+}
+
+message ChatLog {
+    string sender = 1;
+    string content = 2;
+}

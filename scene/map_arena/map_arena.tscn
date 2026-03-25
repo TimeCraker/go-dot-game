@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://cs1dqywx0su7k"]
+
+[ext_resource type="Texture2D" uid="uid://dgmarf0u0u5ub" path="res://assets/map_picture/game_map.png" id="1_apqem"]
+
+[node name="Map_Arena" type="Node2D" unique_id=648806103]
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1634431794]
+texture = ExtResource("1_apqem")
