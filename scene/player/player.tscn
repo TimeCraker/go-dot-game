@@ -1,24 +1,57 @@
 [gd_scene format=3 uid="uid://b1tg7j3oe6yfx"]
 
 [ext_resource type="Script" uid="uid://dyaac6py4fod0" path="res://scene/player/player.gd" id="1_cm2cf"]
-[ext_resource type="Texture2D" uid="uid://bwnacj0utwrhv" path="res://assets/player_picture/LS20260321164248.png" id="2_6smn3"]
+[ext_resource type="Texture2D" uid="uid://fujbyxexqq8n" path="res://assets/player_picture/LS20260326145007.png" id="2_5lop3"]
+[ext_resource type="Texture2D" uid="uid://bbu13dci87tp0" path="res://assets/player_picture/LS20260326144210.png" id="3_ajqqa"]
+[ext_resource type="Texture2D" path="res://assets/player_picture/LS20260326141247.png" id="4_rkmeh"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_732fb"]
+radius = 133.3334
+height = 1000.0
+
+[sub_resource type="Animation" id="Animation_hfhxk"]
+resource_name = "attack"
+
+[sub_resource type="Animation" id="Animation_pisg7"]
+resource_name = "idle"
+
+[sub_resource type="Animation" id="Animation_oypl4"]
+resource_name = "move"
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_qjg4s"]
+_data = {
+&"attack": SubResource("Animation_hfhxk"),
+&"idle": SubResource("Animation_pisg7"),
+&"move": SubResource("Animation_oypl4")
+}
 
 [node name="Player" type="CharacterBody2D" unique_id=982708415]
-scale = Vector2(0.1, 0.1)
+scale = Vector2(0.06, 0.06)
 script = ExtResource("1_cm2cf")
 
 [node name="Visuals" type="Node2D" parent="." unique_id=2122118630]
 
-[node name="Head" type="Sprite2D" parent="Visuals" unique_id=1138904986]
-
 [node name="Body" type="Sprite2D" parent="Visuals" unique_id=1438702316]
-texture = ExtResource("2_6smn3")
+position = Vector2(-50, 49.99997)
+scale = Vector2(1.4433962, 1.7272367)
+texture = ExtResource("2_5lop3")
+
+[node name="Head" type="Sprite2D" parent="Visuals" unique_id=1138904986]
+position = Vector2(50, -499.99997)
+scale = Vector2(1.7738093, 1.95539)
+texture = ExtResource("3_ajqqa")
 
 [node name="Weapon" type="Sprite2D" parent="Visuals" unique_id=543256958]
+position = Vector2(153.45834, 45.000004)
+scale = Vector2(0.7840942, 0.547619)
+texture = ExtResource("4_rkmeh")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1111981497]
+position = Vector2(33.333332, -150)
+shape = SubResource("CapsuleShape2D_732fb")
 
 [node name="UI" type="Node2D" parent="." unique_id=1858960236]
+position = Vector2(-49.999992, -416.66666)
 
 [node name="NameLabel" type="Label" parent="UI" unique_id=2052567970]
 offset_left = -119.99999
@@ -32,3 +65,4 @@ offset_right = 4.0
 offset_bottom = 27.0
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1552094750]
+libraries/ = SubResource("AnimationLibrary_qjg4s")

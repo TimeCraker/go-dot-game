@@ -37,13 +37,7 @@ func connect_to_server() -> void:
 	if ws_base.find("?") != -1:
 		separator = "&"
 
-	var url := (
-		ws_base
-		+ separator
-		+ "token=" + token.uri_encode()
-		+ "&scope=battle"
-		+ "&roomId=" + room_id.uri_encode()
-	)
+	var url: String = ws_base + separator + "token=" + token.uri_encode() + "&scope=battle&roomId=" + room_id.uri_encode()
 
 	var err := peer.connect_to_url(url)
 	if err != OK:
@@ -70,14 +64,9 @@ func _process(_delta: float) -> void:
 	while peer.get_available_packet_count() > 0:
 		var packet: PackedByteArray = peer.get_packet()
 		print("[BattleWsClient] 收到二进制包，长度: ", packet.size())
-		# ===== 新增代码 START =====
-		# 修改内容：对 GameMessage 二进制包进行轻量级 Proto 解码并输出字典
-		# 修改原因：脱离第三方插件，按协议字段读取关键业务数据
-		# 影响范围：仅收包后的日志输出流程
 		var msg_dict: Dictionary = ProtoParser.decode_game_message(packet)
 		print("[BattleWsClient] 解码成功: ", msg_dict)
 		network_message.emit(msg_dict)
-		# ===== 新增代码 END =====
 	# ===== 新增代码 END =====
 
 
@@ -106,3 +95,11 @@ func send_input(input_x: float, input_y: float, is_charging: bool, is_attacking:
 	)
 	peer.put_packet(bytes)
 # ===== 新增代码 END =====
+
+
+func send_ultimate() -> void:
+	if peer.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return
+	# 使用轻量级 JSON 消息触发大招，绕过繁琐的 Protobuf 重编译
+	var json_str := '{"type":"cast_ultimate"}'
+	peer.put_packet(json_str.to_utf8_buffer())

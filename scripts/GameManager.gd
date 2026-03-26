@@ -10,8 +10,10 @@ var username: String = ""
 var room_id: String = ""
 var ws_base: String = ""
 var selected_class: String = ""
+var is_fight_started: bool = false
 
 var _enter_battle_callback: JavaScriptObject = null
+var _start_fight_callback: JavaScriptObject = null
 # ===== 新增代码 END =====
 
 func _ready() -> void:
@@ -24,6 +26,11 @@ func _ready() -> void:
 		if window != null:
 			_enter_battle_callback = JavaScriptBridge.create_callback(_on_enter_battle_from_react)
 			window.enterBattle = _enter_battle_callback
+			_start_fight_callback = JavaScriptBridge.create_callback(func(_args: Array):
+				is_fight_started = true
+				print("[GameManager] 收到前端 FIGHT 指令，战斗开始！")
+			)
+			window.startFight = _start_fight_callback
 			print("[GameManager] window.enterBattle 已注册")
 		else:
 			push_warning("[GameManager] 无法获取 window 接口，enterBattle 未注册")
@@ -56,6 +63,7 @@ func _on_enter_battle_from_react(args: Array) -> void:
 	room_id = str(data.get("roomId", ""))
 	ws_base = str(data.get("wsBase", ""))
 	selected_class = str(data.get("selectedClass", ""))
+	is_fight_started = false
 
 	print("[GameManager] enterBattle 注入完成 user_id=", user_id, " room_id=", room_id)
 

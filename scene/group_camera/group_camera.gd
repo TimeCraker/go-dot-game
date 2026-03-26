@@ -2,11 +2,15 @@ extends Camera2D
 
 # 缩放限制配置 
 var min_zoom: float = 0.6  # 离得最远时的视野
-var max_zoom: float = 4.0  # 离得最近时的视野（提升特写倍数！）
+var max_zoom: float = 5.2  # 离得最近时的视野（提升特写倍数！）
 var margin: Vector2 = Vector2(300.0, 300.0) 
 
 # --- 新增：相机平滑速度配置 ---
-var follow_speed: float = 15.0  # 把这个值调大，相机移动就越快（推荐 10-20）
+var follow_speed: float = 18.0  # 把这个值调大，相机移动就越快（推荐 10-20）
+
+# --- 屏幕震动参数 (可在 Godot 检查器中随时调参) ---
+@export var shake_decay: float = 30.0  # 震动衰减速度（越大停得越快）
+var shake_strength: float = 0.0        # 当前震动强度
 
 
 func track_targets(players_dict: Dictionary, delta: float) -> void:
@@ -52,3 +56,15 @@ func track_targets(players_dict: Dictionary, delta: float) -> void:
 	var target_zoom := Vector2(target_zoom_val, target_zoom_val)
 	
 	zoom = zoom.lerp(target_zoom, 5.0 * delta)
+
+	# --- 应用屏幕震动偏移 ---
+	if shake_strength > 0.0:
+		var random_offset := Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)).normalized()
+		offset = random_offset * shake_strength
+		shake_strength = lerpf(shake_strength, 0.0, shake_decay * delta)
+	else:
+		offset = Vector2.ZERO
+
+func apply_shake(intensity: float) -> void:
+	# 叠加震动强度，防止连续受击震动被覆盖
+	shake_strength = maxf(shake_strength, intensity)
