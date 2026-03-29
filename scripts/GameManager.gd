@@ -10,6 +10,7 @@ var username: String = ""
 var room_id: String = ""
 var ws_base: String = ""
 var selected_class: String = ""
+var is_mobile: bool = false
 var is_fight_started: bool = false
 
 var _enter_battle_callback: JavaScriptObject = null
@@ -31,12 +32,26 @@ func _ready() -> void:
 				print("[GameManager] 收到前端 FIGHT 指令，战斗开始！")
 			)
 			window.startFight = _start_fight_callback
+			var _mobile_mode_cb: JavaScriptObject = JavaScriptBridge.create_callback(_on_set_mobile_mode_from_js)
+			window.setMobileMode = _mobile_mode_cb
 			print("[GameManager] window.enterBattle 已注册")
 		else:
 			push_warning("[GameManager] 无法获取 window 接口，enterBattle 未注册")
 	else:
 		push_warning("[GameManager] 当前非 Web 平台，跳过 JavaScriptBridge 注册")
 	# ===== 新增代码 END =====
+
+func _on_set_mobile_mode_from_js(args: Array) -> void:
+	var v: bool = false
+	if args.size() > 0:
+		v = bool(args[0])
+	is_mobile = v
+	call_deferred("_apply_mobile_mode_to_local_player")
+
+func _apply_mobile_mode_to_local_player() -> void:
+	for p in get_tree().get_nodes_in_group("players"):
+		if p.get("is_local_player") == true and p.has_method("set_mobile_mode"):
+			p.set_mobile_mode(is_mobile)
 
 func _on_enter_battle_from_react(args: Array) -> void:
 	# ===== 新增代码 START =====
@@ -63,15 +78,17 @@ func _on_enter_battle_from_react(args: Array) -> void:
 	room_id = str(data.get("roomId", ""))
 	ws_base = str(data.get("wsBase", ""))
 	selected_class = str(data.get("selectedClass", ""))
+	is_mobile = bool(data.get("isMobile", false))
 	is_fight_started = false
 
-	print("[GameManager] enterBattle 注入完成 user_id=", user_id, " room_id=", room_id)
+	print("[GameManager] enterBattle 注入完成 user_id=", user_id, " room_id=", room_id, " is_mobile=", is_mobile)
 
 	if has_node("/root/BattleWsClient"):
 		var ws_client := get_node("/root/BattleWsClient")
 		ws_client.connect_to_server()
 	else:
 		push_error("[GameManager] 未找到 /root/BattleWsClient，无法连接 WebSocket")
+	call_deferred("_apply_mobile_mode_to_local_player")
 	# ===== 新增代码 END =====
 
 func notify_react(result_type: String, payload_json: String = "{}") -> void:

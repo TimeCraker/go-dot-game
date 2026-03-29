@@ -63,10 +63,20 @@ func _process(_delta: float) -> void:
 
 	while peer.get_available_packet_count() > 0:
 		var packet: PackedByteArray = peer.get_packet()
-		print("[BattleWsClient] 收到二进制包，长度: ", packet.size())
-		var msg_dict: Dictionary = ProtoParser.decode_game_message(packet)
-		print("[BattleWsClient] 解码成功: ", msg_dict)
-		network_message.emit(msg_dict)
+		var msg_dict: Dictionary = {}
+
+		# 兼容 JSON 侧信道与 Protobuf 双轨解析
+		var text := packet.get_string_from_utf8()
+		if text.begins_with("{"):
+			var parsed = JSON.parse_string(text)
+			if typeof(parsed) == TYPE_DICTIONARY:
+				msg_dict = parsed
+		else:
+			msg_dict = ProtoParser.decode_game_message(packet)
+
+		if not msg_dict.is_empty():
+			# print("[BattleWsClient] 解码成功: ", msg_dict)
+			network_message.emit(msg_dict)
 	# ===== 新增代码 END =====
 
 

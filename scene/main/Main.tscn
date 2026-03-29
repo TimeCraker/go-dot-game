@@ -3,10 +3,44 @@
 [ext_resource type="Script" uid="uid://cneujasjm20m2" path="res://scene/main/main.gd" id="1_ngnri"]
 [ext_resource type="PackedScene" uid="uid://cs1dqywx0su7k" path="res://scene/map_arena/map_arena.tscn" id="2_kxuim"]
 [ext_resource type="PackedScene" uid="uid://bl3twfj16p1sg" path="res://scene/group_camera/group_camera.tscn" id="3_62xol"]
+[ext_resource type="PackedScene" uid="uid://bolodsplnqnqu" path="res://addons/virtual_joystick/virtual_joystick.tscn" id="4_kxuim"]
 
-[node name="Node2D" type="Node2D" unique_id=2001978325]
+[node name="Main" type="Node2D" unique_id=2001978325]
 script = ExtResource("1_ngnri")
 
 [node name="Map_Arena" parent="." unique_id=648806103 instance=ExtResource("2_kxuim")]
 
 [node name="GroupCamera" parent="." unique_id=98295495 instance=ExtResource("3_62xol")]
+
+[node name="MobileControls" type="CanvasLayer" parent="." unique_id=1111945347]
+layer = 128
+
+[node name="MoveJoystick" parent="MobileControls" unique_id=912784726 instance=ExtResource("4_kxuim")]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = -457.0
+offset_top = -471.0
+offset_right = -257.0
+offset_bottom = -271.0
+grow_vertical = 0
+dynamic_area_top_margin = 0.5
+dynamic_area_right_margin = 0.45
+joystick_scale = 0.4
+
+[node name="AttackJoystick" parent="MobileControls" unique_id=2060202599 instance=ExtResource("4_kxuim")]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -832.0
+offset_top = -483.0
+offset_right = -632.0
+offset_bottom = -283.0
+grow_horizontal = 0
+grow_vertical = 0
+dynamic_area_left_margin = 0.55
+dynamic_area_top_margin = 0.5
+joystick_scale = 0.4
+action_enabled = false

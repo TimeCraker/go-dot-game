@@ -8,7 +8,8 @@ extends CharacterBody2D
 # --- [移动与摩擦力系统] ---
 const BASE_SPEED: float = 200.0               # 常规跑动满速 (像素/秒)
 const CHARGE_SPEED_MULTIPLIER: float = 0.3    # 蓄力移速惩罚：0.3 代表按住左键时，移速降为正常的 30%
-const ACCEL_TIME: float = 1.33                # 起步惯性：提速到满速需要的时间(秒)，体现肉感
+const ACCEL_TIME: float = 0.30                # 起步惯性：提速到满速需要的时间(秒)，体现肉感
+const WEAPON_CHARGE_ROT: float = -35.0        # 蓄力时刀的旋转角度（负数为逆时针）
 const DASH_FRICTION: float = 18.0             # 冲刺阻力：值越大，冲出去后刹车越快；值越小，滑行越远
 const HIT_STUN_FRICTION: float = 8.0          # 受击摩擦力：值较小，体现被打飞后在地上痛苦滑行的平滑感
 
@@ -72,12 +73,56 @@ var _hitbox_polygon: CollisionPolygon2D = null
 var _attack_hit_targets: Array[CharacterBody2D] = []
 
 var _charge_pivot: Node2D = null
+var _move_joystick: VirtualJoystick = null
+var _attack_joystick: VirtualJoystick = null
+var _attack_joy_dir_cache: Vector2 = Vector2.ZERO
+# ===== 新增：合并的视觉表现变量 =====
+var _head: Node2D
+var _body: Node2D
+var _weapon: Node2D
+var _trail: CPUParticles2D
+var _role_tween: Tween
+var active_buff_timer: float = 0.0
+var _was_buffed: bool = false
+var _last_anim_state: int = -1
+# 新增：记住编辑器里的初始位置和缩放，防止动画让部件乱飞
+var _base_head_pos_y: float = 0.0
+var _base_body_scale: Vector2 = Vector2.ONE
+var _base_weapon_pos_y: float = 0.0
+var _base_weapon_rot: float = 0.0
+var _base_visuals_scale_x: float = 1.0
 
 func _ready() -> void:
 	_build_dynamic_ui()              
 	_build_hitbox_area()             
 	_build_charge_indicator()        
-	apply_class_visuals()
+	# 【强制挂载】绕过网络，强制在本节点初始化极速者特效
+	_setup_integrated_visuals()
+	if is_local_player:
+		var mobile_controls := get_node_or_null("/root/Main/MobileControls")
+		if mobile_controls:
+			_move_joystick = mobile_controls.get_node_or_null("MoveJoystick") as VirtualJoystick
+			_attack_joystick = mobile_controls.get_node_or_null("AttackJoystick") as VirtualJoystick
+			mobile_controls.show()
+			var gm := get_node_or_null("/root/GameManager")
+			set_mobile_mode(gm.is_mobile if gm else false)
+
+func set_mobile_mode(is_mobile: bool) -> void:
+	if not is_local_player:
+		return
+	var mobile_controls := get_node_or_null("/root/Main/MobileControls")
+	if mobile_controls:
+		mobile_controls.show()
+	_apply_joystick_scale(is_mobile)
+
+func _apply_joystick_scale(from_js_mobile: bool) -> void:
+	var os_mobile := OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")
+	var use_large := os_mobile or from_js_mobile
+	var s := 1.5 if use_large else 0.4
+	if _move_joystick:
+		_move_joystick.joystick_scale = s
+	if _attack_joystick:
+		_attack_joystick.joystick_scale = s
 
 func can_move() -> bool:
 	return current_state == State.IDLE or current_state == State.MOVE or current_state == State.CHARGING
@@ -98,9 +143,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		_handle_remote_interpolation(delta)
 	
-	# 委托组件处理专属动画表现
-	if role_mechanic and role_mechanic.has_method("update_animation"):
-		role_mechanic.update_animation(current_state)
+	# 只要状态变了，就调用这个
+	_update_role_animation(current_state)
 	
 	# --- 强制两人左右对望 (取代随鼠标翻转/旋转) ---
 	if _visuals:
@@ -110,9 +154,9 @@ func _physics_process(delta: float) -> void:
 			if opp != self:
 				# 如果对手在右边，我面朝右；对手在左，我面朝左
 				if opp.global_position.x > global_position.x:
-					_visuals.scale.x = 1.0
+					_visuals.scale.x = abs(_visuals.scale.x) * _base_visuals_scale_x
 				else:
-					_visuals.scale.x = -1.0
+					_visuals.scale.x = -abs(_visuals.scale.x) * _base_visuals_scale_x
 				break
 		
 # 处理玩家的操作指令
@@ -133,12 +177,17 @@ func _handle_local_input(delta: float) -> void:
 		_buffer_timer = 0.0
 		_start_attack()
 
-	# --- 纯代码强绑 WASD 物理按键 (零配置直接生效) ---
-	var left: bool = Input.is_physical_key_pressed(KEY_A) or Input.is_action_pressed("ui_left")
-	var right: bool = Input.is_physical_key_pressed(KEY_D) or Input.is_action_pressed("ui_right")
-	var up: bool = Input.is_physical_key_pressed(KEY_W) or Input.is_action_pressed("ui_up")
-	var down: bool = Input.is_physical_key_pressed(KEY_S) or Input.is_action_pressed("ui_down")
-	var input_dir: Vector2 = Vector2(float(right) - float(left), float(down) - float(up)).normalized()
+	var input_dir: Vector2 = Vector2.ZERO
+	if _move_joystick and _move_joystick.is_pressed:
+		input_dir = _move_joystick.output
+		if input_dir != Vector2.ZERO:
+			input_dir = input_dir.normalized()
+	else:
+		var left: bool = Input.is_physical_key_pressed(KEY_A) or Input.is_action_pressed("ui_left")
+		var right: bool = Input.is_physical_key_pressed(KEY_D) or Input.is_action_pressed("ui_right")
+		var up: bool = Input.is_physical_key_pressed(KEY_W) or Input.is_action_pressed("ui_up")
+		var down: bool = Input.is_physical_key_pressed(KEY_S) or Input.is_action_pressed("ui_down")
+		input_dir = Vector2(float(right) - float(left), float(down) - float(up)).normalized()
 	
 	# --- 1. 常规挥砍 (F 键 / 鼠标右键) ---
 	var attack_just_pressed: bool = Input.is_action_just_pressed("attack") or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or Input.is_physical_key_pressed(KEY_F)
@@ -160,8 +209,8 @@ func _handle_local_input(delta: float) -> void:
 			ws.send_ultimate()
 			energy = 0
 			current_state = State.SKILL_CAST
-			if role_mechanic and role_mechanic.has_method("on_cast_ultimate"):
-				role_mechanic.on_cast_ultimate()
+			active_buff_timer = 15.0
+			AudioManager.play_sfx("ultimate", 2.0, false)
 
 			# 【核心修复 1】本地预测大招释放前摇硬直 (0.1秒)，与 Go 服务端完美对齐
 			get_tree().create_timer(0.1).timeout.connect(func():
@@ -169,32 +218,50 @@ func _handle_local_input(delta: float) -> void:
 					current_state = State.IDLE
 			)
 
-	# --- 2. 鼠标左键 两段式蓄力逻辑 ---
+	var is_charging_mouse: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	var is_charging_joystick: bool = false
+	var attack_dir: Vector2 = Vector2.ZERO
+	if _attack_joystick and _attack_joystick.is_pressed:
+		is_charging_joystick = true
+		attack_dir = _attack_joystick.output
+		if attack_dir != Vector2.ZERO:
+			_attack_joy_dir_cache = attack_dir
+	elif is_charging_mouse:
+		_attack_joy_dir_cache = Vector2.ZERO
+	var is_charging_now: bool = is_charging_mouse or is_charging_joystick
+
+	# --- 2. 鼠标左键 / 右摇杆 两段式蓄力逻辑 ---
 	if can_move():
-		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		if is_charging_now:
 			current_state = State.CHARGING
-			var charge_rate: float = 1.5 if role_mechanic and role_mechanic.has_method("has_speed_buff") and role_mechanic.has_speed_buff() else 1.0
+			var charge_rate: float = 1.5 if has_speed_buff() else 1.0
 			charge_timer += delta * charge_rate
 			
 			# 【极限阈值】：捏了 3.5 秒，强制开火！
 			if charge_timer >= MAX_CHARGE_TIME:
 				_charge_pivot.hide()
-				_execute_charge_dash()
+				_execute_charge_dash(attack_dir)
 			else:
 				if not _charge_pivot.visible:
 					_charge_pivot.show()
 				
-				# 【核心修复】：恢复蓄力箭头 360 度跟随鼠标旋转
-				_charge_pivot.look_at(get_global_mouse_position())
+				if is_charging_joystick and attack_dir != Vector2.ZERO:
+					_charge_pivot.rotation = attack_dir.angle()
+				else:
+					_charge_pivot.look_at(get_global_mouse_position())
 				
 				# 【有效时长】：距离计算最高封顶 2.5 秒
 				var effective_time: float = minf(charge_timer, MAX_EFFECTIVE_CHARGE_TIME)
 				var distance: float = effective_time * (BASE_SPEED * DASH_DIST_MULTIPLIER)
 				_charge_pivot.scale.x = maxf(0.2, distance / 100.0)
 			
-		elif current_state == State.CHARGING and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		elif current_state == State.CHARGING and not is_charging_now:
 			_charge_pivot.hide()
-			_execute_charge_dash()
+			var joy_release_aim: Vector2 = attack_dir
+			if joy_release_aim == Vector2.ZERO:
+				joy_release_aim = _attack_joy_dir_cache
+			_attack_joy_dir_cache = Vector2.ZERO
+			_execute_charge_dash(joy_release_aim)
 			
 		elif current_state != State.DASHING and current_state != State.POST_CAST:
 			if input_dir != Vector2.ZERO:
@@ -246,7 +313,8 @@ func _handle_local_input(delta: float) -> void:
 	var ws_client = get_node_or_null("/root/BattleWsClient")
 	if ws_client:
 		var mouse_pos: Vector2 = get_global_mouse_position()
-		var is_charging_now: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+		if is_charging_joystick and attack_dir != Vector2.ZERO:
+			mouse_pos = global_position + (attack_dir * 100.0)
 		var is_attacking_now: bool = (_input_buffer == "attack") or attack_just_pressed
 		ws_client.send_input(
 			input_dir.x,
@@ -258,10 +326,21 @@ func _handle_local_input(delta: float) -> void:
 		)
 	# ===== 新增代码 END =====
 
+	# 新增大招光环维护
+	if active_buff_timer > 0.0:
+		active_buff_timer -= delta
+		_was_buffed = true
+		if _last_anim_state != 7 and _visuals:
+			_visuals.modulate = Color(1.5, 0.5, 1.5)
+	elif _was_buffed:
+		_was_buffed = false
+		if _last_anim_state != 7 and _visuals:
+			_visuals.modulate = Color(1, 1, 1)
+
 # ==========================================
 # 蓄力突刺执行 (Left Click Release)
 # ==========================================
-func _execute_charge_dash() -> void:
+func _execute_charge_dash(dash_dir_joystick: Vector2 = Vector2.ZERO) -> void:
 	# 提取有效蓄力时间 (最高 2.5 秒) 计算最终距离
 	var effective_time: float = minf(charge_timer, MAX_EFFECTIVE_CHARGE_TIME)
 	var distance: float = effective_time * (BASE_SPEED * DASH_DIST_MULTIPLIER)
@@ -272,9 +351,13 @@ func _execute_charge_dash() -> void:
 		return
 		
 	current_state = State.DASHING
-	# 【核心修复】：恢复 360 度冲刺本地预测
-	var mouse_pos: Vector2 = get_global_mouse_position()
-	var dash_dir: Vector2 = global_position.direction_to(mouse_pos)
+	AudioManager.play_sfx("dash", 0.0)
+	var dash_dir: Vector2
+	if dash_dir_joystick != Vector2.ZERO:
+		dash_dir = dash_dir_joystick.normalized()
+	else:
+		var mouse_pos: Vector2 = get_global_mouse_position()
+		dash_dir = global_position.direction_to(mouse_pos)
 	if dash_dir == Vector2.ZERO:
 		dash_dir = Vector2(1.0 if _visuals.scale.x > 0 else -1.0, 0.0)
 	
@@ -291,7 +374,7 @@ func _execute_charge_dash() -> void:
 			if _hitbox_area: _hitbox_area.monitoring = false
 			if _hitbox_polygon: _hitbox_polygon.disabled = true
 
-			if role_mechanic and role_mechanic.has_method("has_speed_buff") and role_mechanic.has_speed_buff():
+			if has_speed_buff():
 				current_state = State.IDLE # 预测：完全取消后摇
 			else:
 				current_state = State.POST_CAST
@@ -319,7 +402,7 @@ func _start_attack() -> void:
 			if _hitbox_area: _hitbox_area.monitoring = false
 			if _hitbox_polygon: _hitbox_polygon.disabled = true
 
-			if role_mechanic and role_mechanic.has_method("has_speed_buff") and role_mechanic.has_speed_buff():
+			if has_speed_buff():
 				current_state = State.IDLE # 预测：完全取消后摇
 			else:
 				current_state = State.POST_CAST
@@ -358,14 +441,32 @@ func _build_charge_indicator() -> void:
 	_charge_pivot = Node2D.new()
 	_charge_pivot.name = "ChargePivot"
 	_charge_pivot.hide()
-	
-	var arrow = Polygon2D.new()
-	arrow.color = Color(0.7, 0.2, 0.9, 0.25) 
-	arrow.polygon = PackedVector2Array([
-		Vector2(20, -6), Vector2(80, -6), Vector2(80, -18), 
-		Vector2(120, 0), Vector2(80, 18), Vector2(80, 6), Vector2(20, 6)
-	])
-	_charge_pivot.add_child(arrow)
+
+	# 1. 主体线段 (产生圆润、半透明的胶囊光束感)
+	var body_line = Line2D.new()
+	body_line.points = PackedVector2Array([Vector2(20, 0), Vector2(90, 0)])
+	body_line.width = 12.0
+	body_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	body_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+
+	# 添加高级渐变色 (发根淡紫粉透明 -> 头部淡淡的亮白)
+	var grad = Gradient.new()
+	grad.add_point(0.0, Color(0.8, 0.6, 0.9, 0.15))
+	grad.add_point(1.0, Color(1.0, 1.0, 1.0, 0.75))
+	body_line.gradient = grad
+
+	# 2. 箭头头部 (利用圆角折线，打造干净利落的几何感)
+	var head_line = Line2D.new()
+	head_line.points = PackedVector2Array([Vector2(70, -14), Vector2(90, 0), Vector2(70, 14)])
+	head_line.width = 12.0
+	head_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	head_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	head_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	head_line.default_color = Color(1.0, 1.0, 1.0, 0.9)
+
+	# 将两根线组装进 Pivot (枢纽) 中
+	_charge_pivot.add_child(body_line)
+	_charge_pivot.add_child(head_line)
 	add_child(_charge_pivot)
 
 func _make_attack_fan_polygon() -> PackedVector2Array:
@@ -418,8 +519,8 @@ func _build_dynamic_ui() -> void:
 	_hp_bar.max_value = 100
 	_hp_bar.value = hp
 	_hp_bar.show_percentage = false
-	_hp_bar.custom_minimum_size = Vector2(100.0, 12.0)
-	_hp_bar.position = Vector2(-50.0, 58.0)
+	_hp_bar.custom_minimum_size = Vector2(200.0, 10.0)
+	_hp_bar.position = Vector2(-100.0, 130.0)
 
 	var bg_style := StyleBoxFlat.new()
 	bg_style.bg_color = Color(0.15, 0.02, 0.02)
@@ -444,6 +545,8 @@ func _ensure_ui_not_mirrored() -> void:
 func _predict_combat_hit(victim: CharacterBody2D) -> void:
 	# 锁定本地状态 0.35 秒，等待服务器快照追上我们的进度
 	prediction_lock_timer = 0.35
+	# 【核心新增】：同时给受害者上锁，避免旧快照打断受击动画
+	victim.prediction_lock_timer = 0.35
 
 	# 强制清理本地攻击与蓄力状态
 	charge_timer = 0.0
@@ -531,47 +634,123 @@ func update_network_state(px: float, pz: float, rot_y: float, server_state: int,
 				global_position = server_pos
 
 	else:
+		# 【核心新增】：远端若处于预测锁定期，拒绝旧快照覆盖
+		if prediction_lock_timer > 0.0:
+			return
 		# 远端玩家完全使用服务端权威状态推进动画与表现
 		current_state = server_state
 		target_pos = Vector2(px, pz)
 		target_rot = deg_to_rad(rot_y)
 
+func has_speed_buff() -> bool:
+	return active_buff_timer > 0.0
+
 # ==========================================
-# 动态视觉 MOD 分发系统 (Component Pattern)
+# 极速者视觉与动画系统 (已合并入 Player)
 # ==========================================
-func apply_class_visuals() -> void:
-	var gm = get_node_or_null("/root/GameManager")
-	if not gm or not gm.room_classes.has(uid): return
+func _setup_integrated_visuals() -> void:
+	if not _visuals: return
 
-	var new_class_id: String = gm.room_classes[uid]
-	if new_class_id == "": return
+	_head = _visuals.get_node_or_null("Head")
+	_body = _visuals.get_node_or_null("Body")
+	_weapon = _visuals.get_node_or_null("Weapon")
+	_base_visuals_scale_x = sign(_visuals.scale.x)
+	if _base_visuals_scale_x == 0.0: _base_visuals_scale_x = 1.0
 
-	if _my_class_id == new_class_id: return
-	_my_class_id = new_class_id
-	print("[Player] 角色 ", uid, " 准备加载视觉组件: ", _my_class_id)
+	# 记录所有部件的基础 Transform，完美兼容镜像和编辑器偏移
+	if _head: _base_head_pos_y = _head.position.y
+	if _body: _base_body_scale = _body.scale
+	if _weapon:
+		_base_weapon_pos_y = _weapon.position.y
+		_base_weapon_rot = _weapon.rotation_degrees
 
-	# 【终极修复】使用 preload 强制 Godot 将脚本打包进 Web 导出文件中
-	var ComponentScript: Script = null
-	match _my_class_id:
-		"Role1_Speedster":
-			ComponentScript = preload("res://scene/player/roles/role1_speedster.gd")
-		"Role3_Reviver":
-			ComponentScript = preload("res://scene/player/roles/role3_reviver.gd")
+	# 特效优化：更细、水墨质感的拖尾
+	_trail = CPUParticles2D.new()
+	_trail.name = "InkTrail"
+	_trail.amount = 30
+	_trail.lifetime = 0.35
+	_trail.gravity = Vector2.ZERO
+	_trail.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	_trail.emission_sphere_radius = 5.0
+	_trail.direction = Vector2(-1, 0)
+	_trail.spread = 3.0
+	_trail.initial_velocity_min = 40.0
+	_trail.initial_velocity_max = 70.0
+	_trail.local_coords = false
 
-	if ComponentScript:
-		var visual_comp = Node.new()
-		visual_comp.name = _my_class_id + "_VisualComponent"
-		visual_comp.set_script(ComponentScript)
+	var grad = Gradient.new()
+	grad.add_point(0.0, Color(0.1, 0.1, 0.1, 0.8))
+	grad.add_point(0.4, Color(0.4, 0.4, 0.4, 0.5))
+	grad.add_point(1.0, Color(1.0, 1.0, 1.0, 0.0))
+	_trail.color_ramp = grad
 
-		add_child(visual_comp)
-		if visual_comp.has_method("init_role"):
-			visual_comp.init_role(self)
-		if visual_comp.has_method("apply_visuals"):
-			visual_comp.apply_visuals(self, _visuals)
-		role_mechanic = visual_comp
-		print("[Player] 成功挂载视觉组件: ", _my_class_id)
-	else:
-		print("[Player] 警告：未匹配到对应的视觉组件 preload")
+	var curve = Curve.new()
+	curve.add_point(Vector2(0, 1.0))
+	curve.add_point(Vector2(1, 0.0))
+	_trail.scale_amount_curve = curve
+	_trail.scale_amount_min = 1.0
+	_trail.scale_amount_max = 3.5
+
+	_visuals.add_child(_trail)
+	_trail.emitting = false
+
+func _update_role_animation(new_state: int) -> void:
+	if new_state == _last_anim_state: return
+	_last_anim_state = new_state
+
+	if not _body or not _visuals: return
+	if _role_tween: _role_tween.kill()
+
+	match new_state:
+		0, 6: # IDLE, POST_CAST (速度放慢 2 倍，头身极度和谐)
+			if _trail: _trail.emitting = false
+			_role_tween = create_tween().set_loops().set_parallel(true)
+			_role_tween.tween_property(_body, "scale:y", _base_body_scale.y * 0.97, 0.8).set_ease(Tween.EASE_IN_OUT)
+			_role_tween.tween_property(_body, "scale:y", _base_body_scale.y, 0.8).set_delay(0.8)
+
+			if _head:
+				_role_tween.tween_property(_head, "position:y", _base_head_pos_y + 1.5, 0.8).set_ease(Tween.EASE_IN_OUT)
+				_role_tween.tween_property(_head, "position:y", _base_head_pos_y, 0.8).set_delay(0.8)
+			if _weapon:
+				_role_tween.tween_property(_weapon, "rotation_degrees", _base_weapon_rot, 0.8)
+
+		1: # MOVE (普通移动)
+			if _trail: _trail.emitting = true
+			_role_tween = create_tween().set_loops().set_parallel(true)
+			_role_tween.tween_property(_body, "scale:y", _base_body_scale.y * 1.03, 0.25)
+			_role_tween.tween_property(_body, "scale:x", _base_body_scale.x * 0.97, 0.25)
+			if _head:
+				_role_tween.tween_property(_head, "position:y", _base_head_pos_y - 2.0, 0.25)
+
+			_role_tween.tween_property(_body, "scale:y", _base_body_scale.y, 0.25).set_delay(0.25)
+			_role_tween.tween_property(_body, "scale:x", _base_body_scale.x, 0.25).set_delay(0.25)
+			if _head:
+				_role_tween.tween_property(_head, "position:y", _base_head_pos_y, 0.25).set_delay(0.25)
+			if _weapon:
+				_role_tween.tween_property(_weapon, "rotation_degrees", _base_weapon_rot + 15.0, 0.25)
+
+		2: # CHARGING (蓄力状态：缓慢平举武器)
+			if _trail: _trail.emitting = true
+			_role_tween = create_tween().set_parallel(true)
+			_role_tween.tween_property(_body, "scale:y", _base_body_scale.y * 0.95, 0.6).set_ease(Tween.EASE_OUT)
+			_role_tween.tween_property(_body, "scale:x", _base_body_scale.x * 1.02, 0.6)
+			if _head:
+				_role_tween.tween_property(_head, "position:y", _base_head_pos_y + 2.0, 0.6)
+			if _weapon:
+				_role_tween.tween_property(_weapon, "rotation_degrees", _base_weapon_rot + WEAPON_CHARGE_ROT, 1.5).set_ease(Tween.EASE_OUT)
+		3: # DASHING
+			if _trail: _trail.emitting = true
+		7: # HIT_STUN (受击)
+			if _trail: _trail.emitting = false
+			_role_tween = create_tween().set_parallel(true)
+			_visuals.modulate = Color(3.0, 0.2, 0.2)
+			_role_tween.tween_property(_body, "scale", _base_body_scale * 0.8, 0.1)
+			_role_tween.tween_property(_body, "scale", _base_body_scale, 0.3).set_delay(0.1)
+
+			get_tree().create_timer(0.2).timeout.connect(func():
+				if _last_anim_state == 7 and _visuals:
+					_visuals.modulate = Color(1.5, 0.5, 1.5) if active_buff_timer > 0 else Color(1, 1, 1)
+			)
 
 # ==========================================
 # 打击感反馈：卡肉顿帧 (Hit-Stop) & 屏幕震动
@@ -581,6 +760,12 @@ func _trigger_hit_feedback(is_clash: bool) -> void:
 	var cam = get_viewport().get_camera_2d()
 	if cam and cam.has_method("apply_shake"):
 		cam.apply_shake(SHAKE_INTENSITY_CLASH if is_clash else SHAKE_INTENSITY_NORMAL)
+
+	# 【新增音效】：根据是否拼刀播放不同的随机声音
+	if is_clash:
+		AudioManager.play_sfx("clash", 2.0)
+	else:
+		AudioManager.play_sfx("hit_flesh", 0.0)
 
 	# 2. 触发卡肉顿帧 (若已处于绝杀特写 0.2 倍速，则不覆盖)
 	if Engine.time_scale == 0.2: return
