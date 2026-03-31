@@ -1,0 +1,665 @@
+﻿Folder PATH listing
+Volume serial number is B85E-49CE
+C:.
+|   .cursorrules
+|   export_presets.cfg
+|   README.md
+|   
+|   |   .gdignore
+|   |   export_credentials.cfg
+|   |   global_script_class_cache.cfg
+|   |   scene_groups_cache.cfg
+|   |   uid_cache.bin
+|   |   
+|   +---editor
+|   |       ArenaMap.gd.gd-folding-a417ecb8c281f43aee4766df8433d7fe.cfg
+|   |       BattleWsClient.gd-folding-8e7bfc6809aa5f7453999c8c66b94a84.cfg
+|   |       Cinematic_dark_scien_#2-1774509774533.wav-2f1ec72f9af230cdd64425f3c4b831ed.sample-folding-3918a29752719e62f6cd97ecb62f1b3d.cfg
+|   |       Cinematic_dark_scien_#4-1774509774692.wav-90e1280659a83810b06926577abde530.sample-folding-426cd46c838736aea205edf628339e4a.cfg
+|   |       clash_1.wav-00bfe24584b5d36344470038f2fd8068.sample-folding-0fe18ad74db290338bb736aa05dfb409.cfg
+|   |       Create_a_stylized_GA_#2-1774508975214.wav-b694e906ae4834b1fbe09ae382f6a3ab.sample-folding-38f12dd6458c4df94df1d52a90cbca91.cfg
+|   |       create_recent.Node
+|   |       dash_1.wav-060d7c1e39881a2f81c7bd7587e79937.sample-folding-b3bd16fc8f3f79139d75fd218bbe7dbc.cfg
+|   |       dash_2.wav-1754306b49b44c6b39ed70a5b5dc868a.sample-folding-1bf5645f4412ddad2c28b6f30464ee79.cfg
+|   |       editor_layout.cfg
+|   |       editor_script_doc_cache.res-folding-a7de57390d6e786984ca20c70a831128.cfg
+|   |       export-1696bf63ac0eaf86eb756e277c403fe4-map_arena.scn-folding-12deea7eccc179737f15bccdcc7c6bf9.cfg
+|   |       export-24aeab29fff0b9f18e5ae72a4a7df8d1-Main.scn-folding-59a0a76461c7f237f9d79088be2796a1.cfg
+|   |       export-24e0dbbfa0241cc912188e8248e57caa-joystick_settings.scn-folding-4d52252a736c7ae970c33874184b0ecc.cfg
+|   |       export-3224d1f9a64809cf5cd7fa60e8bd8cdd-Main.scn-folding-71e4947e4e7c7a4a31eee80cb1cc87f1.cfg
+|   |       export-34afcb3bda2393b8f6a0cd71512aeb81-player.scn-folding-8f36815c01585611fe66e0a592f0c8ef.cfg
+|   |       export-3e038ebae82c2bbbd20a0c261d1078da-player.scn-folding-08714f67c6cd9bc45758c2326a2ccc16.cfg
+|   |       export-438dfdeeb98904fc25347faa0b0e57c4-player.scn-folding-df442908dc153c35615f66d3982d9def.cfg
+|   |       export-498c482b913a5088fb41d57227f5da71-virtual_joystick.scn-folding-1277fcc35e71c977a56bbef955e4932a.cfg
+|   |       export-5004f9b92177c0545ce07efd32447c98-weapon.scn-folding-d403f9b0e6f0f0cb176af1b2bf9a5399.cfg
+|   |       export-5420d1b405ed0cdc347569b753640b3a-group_camera.scn-folding-85be5a88c61f25a39b6ddd4576fd6ee4.cfg
+|   |       export-623c110cb0e774205464de72cf9ce8b2-main_game.scn-folding-ae0187ee1e4a1a31f0e89ae77d8c8874.cfg
+|   |       export-71a665ec7578386bdf5be4496f6b01f6-map_arena.scn-folding-73124b3bd3d2e1c1f30b6b19b966a61a.cfg
+|   |       export-bcb0d2eb5949c52b6a65bfe9de3e985b-Main.scn-folding-0365e30fa89c4d0ab0ce0494ef9d9eae.cfg
+|   |       export-be6b87f4b2964595d0399e8806729c24-group_camera.scn-folding-94eb93d5b49e2a12066dd6c737d96636.cfg
+|   |       export-df42f4b496f3144471900dc3a6c71913-projectile.scn-folding-99b34204529b75a0e000d0a0a7989329.cfg
+|   |       favorites
+|   |       favorites.Node
+|   |       favorites.Resource
+|   |       favorite_properties
+|   |       filesystem_cache10
+|   |       filesystem_update4
+|   |       gdprotobuf.gd-folding-02c54faf640695d742bdd33614d0a30a.cfg
+|   |       group_camera.gd-folding-876b1631cc0d9e185b64594bab1971b6.cfg
+|   |       group_camera.gd-folding-eb34e25e5cb18e00a2dd18121994ad33.cfg
+|   |       group_camera.tscn-editstate-5420d1b405ed0cdc347569b753640b3a.cfg
+|   |       group_camera.tscn-editstate-be6b87f4b2964595d0399e8806729c24.cfg
+|   |       group_camera.tscn-editstate-f24e276b1f65b66b8b2023be553be3c5.cfg
+|   |       group_camera.tscn-folding-5420d1b405ed0cdc347569b753640b3a.cfg
+|   |       group_camera.tscn-folding-be6b87f4b2964595d0399e8806729c24.cfg
+|   |       group_camera.tscn-folding-f24e276b1f65b66b8b2023be553be3c5.cfg
+|   |       hit_1.wav-f47e99bca944d643af4809290f6d0ecc.sample-folding-61cd7c07f1b4b284b7bf4f8d40ee8896.cfg
+|   |       hit_2.wav-cdded1953d0acaeb06d6a666c69ee0ee.sample-folding-8a237635b2ec55dc92d135d9a61249ab.cfg
+|   |       hit_3.wav-57d64625272774ea2cd56ff1324ba660.sample-folding-dda7242f54f26eaef6dc780d96b1c08b.cfg
+|   |       main.gd-folding-ec798fa92b5a6ae07cedf93065232b63.cfg
+|   |       Main.tscn-editstate-24aeab29fff0b9f18e5ae72a4a7df8d1.cfg
+|   |       Main.tscn-editstate-3224d1f9a64809cf5cd7fa60e8bd8cdd.cfg
+|   |       Main.tscn-editstate-bcb0d2eb5949c52b6a65bfe9de3e985b.cfg
+|   |       Main.tscn-folding-24aeab29fff0b9f18e5ae72a4a7df8d1.cfg
+|   |       Main.tscn-folding-3224d1f9a64809cf5cd7fa60e8bd8cdd.cfg
+|   |       Main.tscn-folding-bcb0d2eb5949c52b6a65bfe9de3e985b.cfg
+|   |       map_arena.tscn-editstate-1696bf63ac0eaf86eb756e277c403fe4.cfg
+|   |       map_arena.tscn-editstate-71a665ec7578386bdf5be4496f6b01f6.cfg
+|   |       map_arena.tscn-folding-1696bf63ac0eaf86eb756e277c403fe4.cfg
+|   |       map_arena.tscn-folding-71a665ec7578386bdf5be4496f6b01f6.cfg
+|   |       player.gd-folding-ae9370daae2d842e198def679e002f6a.cfg
+|   |       player.gd-folding-faf8f750e4cec6d216225d4b973c68d5.cfg
+|   |       player.tscn-editstate-34afcb3bda2393b8f6a0cd71512aeb81.cfg
+|   |       player.tscn-editstate-3e038ebae82c2bbbd20a0c261d1078da.cfg
+|   |       player.tscn-folding-34afcb3bda2393b8f6a0cd71512aeb81.cfg
+|   |       player.tscn-folding-3e038ebae82c2bbbd20a0c261d1078da.cfg
+|   |       project_metadata.cfg
+|   |       quick_open_dialog_cache.cfg
+|   |       recent_dirs
+|   |       script_editor_cache.cfg
+|   |       ultimate_1.wav-68679ad7cde08c8e312380223898eb8e.sample-folding-0f1db0b29c3fc8397e25a7190cce2d49.cfg
+|   |       �����Ч.wav-0522eaf6387926e5dc2b685c883ff97e.sample-folding-d8fb50adeb599dfdb88f20af8402abb9.cfg
+|   |       �����Ч��.wav-138500fe33f37581ffff94b0a8d9b4d0.sample-folding-b2c4d0d1b4ed9146a00ad44cd8ea888d.cfg
+|   |       ������ײ������.wav-60aaef0b7dc904f4352ef34f0d3b2d5d.sample-folding-1ed0630736da7f16d3117262bf984710.cfg
+|   |       �����е���Ч.wav-344154f6bd9138271891367ed05c9c0a.sample-folding-35a4a14f2529d7a2a4546ddd94c4fdb4.cfg
+|   |       ��ײ�ܻ���Ч (2).wav-f278535f0dc234b87bbe459a8d9ee00c.sample-folding-9c334281506fe632c9a121923b8f9234.cfg
+|   |       ��ײ�ܻ���Ч (3).wav-e2467ad0b7623f35b59b8941afc4e84d.sample-folding-f336fb926523fb594b139dbfa98fc86e.cfg
+|   |       ��ײ�ܻ���Ч.wav-4e3202d94ae5fcc4675d9e508d669680.sample-folding-dc85cf347cd613a3e6fe7708b61fddce.cfg
+|   |       
+|   +---exported
+|   |   \---133200997
+|   |           export-1696bf63ac0eaf86eb756e277c403fe4-map_arena.scn
+|   |           export-24aeab29fff0b9f18e5ae72a4a7df8d1-Main.scn
+|   |           export-24e0dbbfa0241cc912188e8248e57caa-joystick_settings.scn
+|   |           export-3224d1f9a64809cf5cd7fa60e8bd8cdd-Main.scn
+|   |           export-34afcb3bda2393b8f6a0cd71512aeb81-player.scn
+|   |           export-3e038ebae82c2bbbd20a0c261d1078da-player.scn
+|   |           export-438dfdeeb98904fc25347faa0b0e57c4-player.scn
+|   |           export-498c482b913a5088fb41d57227f5da71-virtual_joystick.scn
+|   |           export-5004f9b92177c0545ce07efd32447c98-weapon.scn
+|   |           export-5420d1b405ed0cdc347569b753640b3a-group_camera.scn
+|   |           export-623c110cb0e774205464de72cf9ce8b2-main_game.scn
+|   |           export-71a665ec7578386bdf5be4496f6b01f6-map_arena.scn
+|   |           export-bcb0d2eb5949c52b6a65bfe9de3e985b-Main.scn
+|   |           export-be6b87f4b2964595d0399e8806729c24-group_camera.scn
+|   |           export-df42f4b496f3144471900dc3a6c71913-projectile.scn
+|   |           file_cache
+|   |           
+|   +---imported
+|   |       arena_map_v2.jpg-d5baef49f9ea4e4c60432b3d9c36843e.ctex
+|   |       arena_map_v2.jpg-d5baef49f9ea4e4c60432b3d9c36843e.md5
+|   |       arena_map_v2.png-685e108ba45733c1e4630c9f487f98c0.md5
+|   |       base_texture.svg-e8a4ce4870d15cf26f22123e600c03af.ctex
+|   |       base_texture.svg-e8a4ce4870d15cf26f22123e600c03af.md5
+|   |       Cinematic_dark_scien_#2-1774509774533.wav-2f1ec72f9af230cdd64425f3c4b831ed.md5
+|   |       Cinematic_dark_scien_#2-1774509774533.wav-2f1ec72f9af230cdd64425f3c4b831ed.sample
+|   |       Cinematic_dark_scien_#4-1774509774692.wav-90e1280659a83810b06926577abde530.md5
+|   |       Cinematic_dark_scien_#4-1774509774692.wav-90e1280659a83810b06926577abde530.sample
+|   |       clash_1.wav-00bfe24584b5d36344470038f2fd8068.md5
+|   |       clash_1.wav-00bfe24584b5d36344470038f2fd8068.sample
+|   |       Create_a_stylized_GA_#2-1774508975214.wav-b694e906ae4834b1fbe09ae382f6a3ab.md5
+|   |       Create_a_stylized_GA_#2-1774508975214.wav-b694e906ae4834b1fbe09ae382f6a3ab.sample
+|   |       dash_1.wav-060d7c1e39881a2f81c7bd7587e79937.md5
+|   |       dash_1.wav-060d7c1e39881a2f81c7bd7587e79937.sample
+|   |       dash_2.wav-1754306b49b44c6b39ed70a5b5dc868a.md5
+|   |       dash_2.wav-1754306b49b44c6b39ed70a5b5dc868a.sample
+|   |       devide.png-0f57d5b4daa8cde0dc024e756b4e1ae5.ctex
+|   |       devide.png-0f57d5b4daa8cde0dc024e756b4e1ae5.md5
+|   |       game_map.png-0b2079f6fab79aeff2c86676a2715101.ctex
+|   |       game_map.png-0b2079f6fab79aeff2c86676a2715101.md5
+|   |       Gemini_Generated_Image_yuj15lyuj15lyuj1.png-9d6645dcaa8b8d08300db4fd5699710a.ctex
+|   |       Gemini_Generated_Image_yuj15lyuj15lyuj1.png-9d6645dcaa8b8d08300db4fd5699710a.md5
+|   |       hit_1.wav-f47e99bca944d643af4809290f6d0ecc.md5
+|   |       hit_1.wav-f47e99bca944d643af4809290f6d0ecc.sample
+|   |       hit_2.wav-cdded1953d0acaeb06d6a666c69ee0ee.md5
+|   |       hit_2.wav-cdded1953d0acaeb06d6a666c69ee0ee.sample
+|   |       hit_3.wav-57d64625272774ea2cd56ff1324ba660.md5
+|   |       hit_3.wav-57d64625272774ea2cd56ff1324ba660.sample
+|   |       icon.svg-218a8f2b3041327d8a5756f3a245f83b.md5
+|   |       icon.svg-56083ea2a1f1a4f1e49773bdc6d7826c.ctex
+|   |       icon.svg-56083ea2a1f1a4f1e49773bdc6d7826c.md5
+|   |       LS20260321164248.png-02500bfc7287a91145a4d5657d8765f8.ctex
+|   |       LS20260321164248.png-02500bfc7287a91145a4d5657d8765f8.md5
+|   |       LS20260321164248.png-8395cfbfaa6c498c078c42d1515b101c.ctex
+|   |       LS20260321164248.png-8395cfbfaa6c498c078c42d1515b101c.md5
+|   |       LS20260321164248.png-ecbdfbacb68eaa02def09443f62b1e02.ctex
+|   |       LS20260321164248.png-ecbdfbacb68eaa02def09443f62b1e02.md5
+|   |       LS20260326141239.png-72d4f03692c63a55417b0a0661b215ae.md5
+|   |       LS20260326141247.png-ea380097644f37fce41b361586428e38.md5
+|   |       LS20260326141309.png-e3183f8f664de233bce15a191facec7a.md5
+|   |       LS20260326144210.png-67ecd6d921db1cd0507443818d99cdf5.ctex
+|   |       LS20260326144210.png-67ecd6d921db1cd0507443818d99cdf5.md5
+|   |       LS20260326144405.png-3e3fd90633d916c9225304a7418c978b.ctex
+|   |       LS20260326144405.png-3e3fd90633d916c9225304a7418c978b.md5
+|   |       LS20260326144440.png-d9b6aaf58bbb5c9a2202cfb45367fe8d.ctex
+|   |       LS20260326144440.png-d9b6aaf58bbb5c9a2202cfb45367fe8d.md5
+|   |       LS20260326145007.png-a6238ff93a44ef758f4ddf5146df161f.ctex
+|   |       LS20260326145007.png-a6238ff93a44ef758f4ddf5146df161f.md5
+|   |       players.png-f2c46ea1756554b3d3597bac831cd94f.ctex
+|   |       players.png-f2c46ea1756554b3d3597bac831cd94f.md5
+|   |       speed.png-46c0342227f98120c8ab76201d050f03.ctex
+|   |       speed.png-46c0342227f98120c8ab76201d050f03.md5
+|   |       stick_texture.svg-90ee63050e8356cd4b72f98182b87fa5.ctex
+|   |       stick_texture.svg-90ee63050e8356cd4b72f98182b87fa5.md5
+|   |       texture_01.png-2bf7db98e09b5b5073e8e8ca66419718.ctex
+|   |       texture_01.png-2bf7db98e09b5b5073e8e8ca66419718.md5
+|   |       texture_01.png-38f28acdb9a95ea2efd835531b47e519.ctex
+|   |       texture_01.png-38f28acdb9a95ea2efd835531b47e519.md5
+|   |       texture_01.png-44f9331a67ce6f062549bc436289d3c9.ctex
+|   |       texture_01.png-44f9331a67ce6f062549bc436289d3c9.md5
+|   |       texture_01.png-60e3b3d3143b179c069dbcbff77ff160.ctex
+|   |       texture_01.png-60e3b3d3143b179c069dbcbff77ff160.md5
+|   |       texture_01.png-94ebd82494c839e91a05b9e1cc2750ca.ctex
+|   |       texture_01.png-94ebd82494c839e91a05b9e1cc2750ca.md5
+|   |       texture_01.png-e10423e44834e1b4a90c3134e446b32d.ctex
+|   |       texture_01.png-e10423e44834e1b4a90c3134e446b32d.md5
+|   |       texture_02.png-4eab4e19c2171e5b0668b65373b74c6d.ctex
+|   |       texture_02.png-4eab4e19c2171e5b0668b65373b74c6d.md5
+|   |       texture_02.png-814d4f515892bb8274d285748f4a73a0.ctex
+|   |       texture_02.png-814d4f515892bb8274d285748f4a73a0.md5
+|   |       texture_02.png-aa1bb055b55bdc7c20e196b7286eebdf.ctex
+|   |       texture_02.png-aa1bb055b55bdc7c20e196b7286eebdf.md5
+|   |       texture_02.png-bb6eefc15212ba5b8098e9e672c21f12.ctex
+|   |       texture_02.png-bb6eefc15212ba5b8098e9e672c21f12.md5
+|   |       texture_02.png-fcb52d424cd62d43221e4153fa3176f8.ctex
+|   |       texture_02.png-fcb52d424cd62d43221e4153fa3176f8.md5
+|   |       texture_02.png-ffde4d38b35463525c3815b255790206.ctex
+|   |       texture_02.png-ffde4d38b35463525c3815b255790206.md5
+|   |       texture_03.png-10a2d13d96fe9dba00c822080243f048.ctex
+|   |       texture_03.png-10a2d13d96fe9dba00c822080243f048.md5
+|   |       texture_03.png-129b8387293b325752961580c78873e2.ctex
+|   |       texture_03.png-129b8387293b325752961580c78873e2.md5
+|   |       texture_03.png-3fec31a20982e9bd2e5e1aa731ea99cf.ctex
+|   |       texture_03.png-3fec31a20982e9bd2e5e1aa731ea99cf.md5
+|   |       texture_03.png-6e55012c4e1c3f4d809747f3852d75ad.ctex
+|   |       texture_03.png-6e55012c4e1c3f4d809747f3852d75ad.md5
+|   |       texture_03.png-dcaf463e914c7896b38a95f49416e75a.ctex
+|   |       texture_03.png-dcaf463e914c7896b38a95f49416e75a.md5
+|   |       texture_03.png-eef45c22e5a84c5df22e7f80e41112c6.ctex
+|   |       texture_03.png-eef45c22e5a84c5df22e7f80e41112c6.md5
+|   |       texture_04.png-1d63b32ccdbf1561b92a917dfb5f84ea.ctex
+|   |       texture_04.png-1d63b32ccdbf1561b92a917dfb5f84ea.md5
+|   |       texture_04.png-201edfe05d5c4f7f54049864048cfaf1.ctex
+|   |       texture_04.png-201edfe05d5c4f7f54049864048cfaf1.md5
+|   |       texture_04.png-4678cc1dfb831f775bdc30cfd7f78769.ctex
+|   |       texture_04.png-4678cc1dfb831f775bdc30cfd7f78769.md5
+|   |       texture_04.png-6783bd4aa338a51e03fa71a2a0ba6c73.ctex
+|   |       texture_04.png-6783bd4aa338a51e03fa71a2a0ba6c73.md5
+|   |       texture_04.png-af505c12b2a7903458bb29299e718506.ctex
+|   |       texture_04.png-af505c12b2a7903458bb29299e718506.md5
+|   |       texture_04.png-e978f0e00463b6cfc60da06ec0abdb7a.ctex
+|   |       texture_04.png-e978f0e00463b6cfc60da06ec0abdb7a.md5
+|   |       texture_05.png-07ce2eafef84a176bcf77bc59cb1f6ec.ctex
+|   |       texture_05.png-07ce2eafef84a176bcf77bc59cb1f6ec.md5
+|   |       texture_05.png-57f4196ea276097368d03084372aa101.ctex
+|   |       texture_05.png-57f4196ea276097368d03084372aa101.md5
+|   |       texture_05.png-8448519b39c1d98d64cf807b48969765.ctex
+|   |       texture_05.png-8448519b39c1d98d64cf807b48969765.md5
+|   |       texture_05.png-888b467a21712cbc594106138f9173b8.ctex
+|   |       texture_05.png-888b467a21712cbc594106138f9173b8.md5
+|   |       texture_05.png-a44b3d75bc02c9b33606b6fe46e8c886.ctex
+|   |       texture_05.png-a44b3d75bc02c9b33606b6fe46e8c886.md5
+|   |       texture_05.png-ed8122ecdc41ff5aeccab84e8db1e4f0.ctex
+|   |       texture_05.png-ed8122ecdc41ff5aeccab84e8db1e4f0.md5
+|   |       texture_06.png-004ed3d5b88361cdfb83a20714e917e7.ctex
+|   |       texture_06.png-004ed3d5b88361cdfb83a20714e917e7.md5
+|   |       texture_06.png-01c48f82ab8bc613ec4efc2c2c669b12.ctex
+|   |       texture_06.png-01c48f82ab8bc613ec4efc2c2c669b12.md5
+|   |       texture_06.png-352782bc60b4b3fe4a632b0a6af5553d.ctex
+|   |       texture_06.png-352782bc60b4b3fe4a632b0a6af5553d.md5
+|   |       texture_06.png-566b521660a0c01cabf8778c12eb1f51.ctex
+|   |       texture_06.png-566b521660a0c01cabf8778c12eb1f51.md5
+|   |       texture_06.png-88331a9f246e47943dc01d0128a4ca4e.ctex
+|   |       texture_06.png-88331a9f246e47943dc01d0128a4ca4e.md5
+|   |       texture_06.png-96fbf63c84855b5763ca7a9239b4162f.ctex
+|   |       texture_06.png-96fbf63c84855b5763ca7a9239b4162f.md5
+|   |       texture_07.png-042b529a59b56931d5b854290aa24a7f.ctex
+|   |       texture_07.png-042b529a59b56931d5b854290aa24a7f.md5
+|   |       texture_07.png-3fa938673385861e205adbc05b5cb69f.ctex
+|   |       texture_07.png-3fa938673385861e205adbc05b5cb69f.md5
+|   |       texture_07.png-7c77ff22e41b4a54319073cb71530d81.ctex
+|   |       texture_07.png-7c77ff22e41b4a54319073cb71530d81.md5
+|   |       texture_07.png-ab5f4a6ad655d06104ea7939a06ec496.ctex
+|   |       texture_07.png-ab5f4a6ad655d06104ea7939a06ec496.md5
+|   |       texture_07.png-ba1d32ad61ab49ac0edaf4930e4d081f.ctex
+|   |       texture_07.png-ba1d32ad61ab49ac0edaf4930e4d081f.md5
+|   |       texture_07.png-eec10b758cacbb71a02166a7f8cee6c0.ctex
+|   |       texture_07.png-eec10b758cacbb71a02166a7f8cee6c0.md5
+|   |       texture_08.png-5883ddd047173c8b118ead887054e6fc.ctex
+|   |       texture_08.png-5883ddd047173c8b118ead887054e6fc.md5
+|   |       texture_08.png-7b5c5c16cd076d2bbc9eeb33a454861b.ctex
+|   |       texture_08.png-7b5c5c16cd076d2bbc9eeb33a454861b.md5
+|   |       texture_08.png-9f039f47cba295ef5881d7b94c369b5d.ctex
+|   |       texture_08.png-9f039f47cba295ef5881d7b94c369b5d.md5
+|   |       texture_08.png-add0c08e78cde6ad4eaac64e7b9a9204.ctex
+|   |       texture_08.png-add0c08e78cde6ad4eaac64e7b9a9204.md5
+|   |       texture_08.png-ae3e54cc23ad438ea83a8932fe526f9f.ctex
+|   |       texture_08.png-ae3e54cc23ad438ea83a8932fe526f9f.md5
+|   |       texture_08.png-d1888869b0d1d3a0ab2d517cbac7820a.ctex
+|   |       texture_08.png-d1888869b0d1d3a0ab2d517cbac7820a.md5
+|   |       texture_09.png-4fe3f0e3bd94fb29789b41c9100c3ac9.ctex
+|   |       texture_09.png-4fe3f0e3bd94fb29789b41c9100c3ac9.md5
+|   |       texture_09.png-53f655f3d7e1722128f99e8aff9071f9.ctex
+|   |       texture_09.png-53f655f3d7e1722128f99e8aff9071f9.md5
+|   |       texture_09.png-8e25cd5657e2d326068eb27bfa1aacec.ctex
+|   |       texture_09.png-8e25cd5657e2d326068eb27bfa1aacec.md5
+|   |       texture_09.png-a21adfe1a090b0dd8f0d376d9ee5f68e.ctex
+|   |       texture_09.png-a21adfe1a090b0dd8f0d376d9ee5f68e.md5
+|   |       texture_09.png-bfc57ad7b0bd0aecb6d4584eb0197660.ctex
+|   |       texture_09.png-bfc57ad7b0bd0aecb6d4584eb0197660.md5
+|   |       texture_09.png-d3e0d0da868b68102c983480f9cde71d.ctex
+|   |       texture_09.png-d3e0d0da868b68102c983480f9cde71d.md5
+|   |       texture_10.png-1e788999a192eabd201c3b3435475799.ctex
+|   |       texture_10.png-1e788999a192eabd201c3b3435475799.md5
+|   |       texture_10.png-3f72abba172432380bd86a508e997833.ctex
+|   |       texture_10.png-3f72abba172432380bd86a508e997833.md5
+|   |       texture_10.png-499479b9aaf089d55adf67874bc0ff66.ctex
+|   |       texture_10.png-499479b9aaf089d55adf67874bc0ff66.md5
+|   |       texture_10.png-6ebba9cac53386550299b9fc7ba436fd.ctex
+|   |       texture_10.png-6ebba9cac53386550299b9fc7ba436fd.md5
+|   |       texture_10.png-6f0f09db66c0562f01b2d2954722e3af.ctex
+|   |       texture_10.png-6f0f09db66c0562f01b2d2954722e3af.md5
+|   |       texture_10.png-6fd251723c4fc19b26785b571c62b6ac.ctex
+|   |       texture_10.png-6fd251723c4fc19b26785b571c62b6ac.md5
+|   |       texture_11.png-0fd2ee750e7568773caf6d873885f437.ctex
+|   |       texture_11.png-0fd2ee750e7568773caf6d873885f437.md5
+|   |       texture_11.png-44ab559d4c1ab996ce064426a9e01b38.ctex
+|   |       texture_11.png-44ab559d4c1ab996ce064426a9e01b38.md5
+|   |       texture_11.png-4e4ade9ab136614b6cf0b0e879f1d510.ctex
+|   |       texture_11.png-4e4ade9ab136614b6cf0b0e879f1d510.md5
+|   |       texture_11.png-ad76ef70f9eb459fb1e8d9ba9cc092c4.ctex
+|   |       texture_11.png-ad76ef70f9eb459fb1e8d9ba9cc092c4.md5
+|   |       texture_11.png-ebf2797e5f22648b239ddd9dce347372.ctex
+|   |       texture_11.png-ebf2797e5f22648b239ddd9dce347372.md5
+|   |       texture_11.png-f61ad46caf1a41d85454e490ec43c8ec.ctex
+|   |       texture_11.png-f61ad46caf1a41d85454e490ec43c8ec.md5
+|   |       texture_12.png-079a27ce3f0ee0e1854090577bd0ba2a.ctex
+|   |       texture_12.png-079a27ce3f0ee0e1854090577bd0ba2a.md5
+|   |       texture_12.png-6af19821abb02cb29bb6ed24ee4670e0.ctex
+|   |       texture_12.png-6af19821abb02cb29bb6ed24ee4670e0.md5
+|   |       texture_12.png-8a7cfbfe5b83f5813249f6314841357c.ctex
+|   |       texture_12.png-8a7cfbfe5b83f5813249f6314841357c.md5
+|   |       texture_12.png-8fe800bbb69d01cae0c0d84c062244bf.ctex
+|   |       texture_12.png-8fe800bbb69d01cae0c0d84c062244bf.md5
+|   |       texture_12.png-aa893b2c5354267551e55ec14bb1999b.ctex
+|   |       texture_12.png-aa893b2c5354267551e55ec14bb1999b.md5
+|   |       texture_12.png-d4577347200436d9060aa21fce76cd93.ctex
+|   |       texture_12.png-d4577347200436d9060aa21fce76cd93.md5
+|   |       texture_13.png-51cb3f38ea774c85cb3ad561d20c5b53.ctex
+|   |       texture_13.png-51cb3f38ea774c85cb3ad561d20c5b53.md5
+|   |       texture_13.png-891332ffbf32d9b94212aaf3a11a15a9.ctex
+|   |       texture_13.png-891332ffbf32d9b94212aaf3a11a15a9.md5
+|   |       texture_13.png-a11a0cfe132bc07bf4c480fd4334a284.ctex
+|   |       texture_13.png-a11a0cfe132bc07bf4c480fd4334a284.md5
+|   |       texture_13.png-a43b6ac63b0fe1c4a3f66335474e59b6.ctex
+|   |       texture_13.png-a43b6ac63b0fe1c4a3f66335474e59b6.md5
+|   |       texture_13.png-ae54826bbb20288cf5ae03de2f2de21d.ctex
+|   |       texture_13.png-ae54826bbb20288cf5ae03de2f2de21d.md5
+|   |       texture_13.png-f5b9867fd39cd83793f3a92217d9eac6.ctex
+|   |       texture_13.png-f5b9867fd39cd83793f3a92217d9eac6.md5
+|   |       tileset.png-7b6d97b69c5040eb7bbde592b4edd568.ctex
+|   |       tileset.png-7b6d97b69c5040eb7bbde592b4edd568.md5
+|   |       ultimate_1.wav-68679ad7cde08c8e312380223898eb8e.md5
+|   |       ultimate_1.wav-68679ad7cde08c8e312380223898eb8e.sample
+|   |       virtual_joystick_icon.svg-7d4f06dc1e7b1ad62fde7ef119156ad1.ctex
+|   |       virtual_joystick_icon.svg-7d4f06dc1e7b1ad62fde7ef119156ad1.md5
+|   |       weapons.png-8bc26f7717ca5cbc33a03f4e21b0a82a.ctex
+|   |       weapons.png-8bc26f7717ca5cbc33a03f4e21b0a82a.md5
+|   |       �����Ч.wav-0522eaf6387926e5dc2b685c883ff97e.md5
+|   |       �����Ч.wav-0522eaf6387926e5dc2b685c883ff97e.sample
+|   |       �����Ч��.wav-138500fe33f37581ffff94b0a8d9b4d0.md5
+|   |       �����Ч��.wav-138500fe33f37581ffff94b0a8d9b4d0.sample
+|   |       ������ײ������.wav-60aaef0b7dc904f4352ef34f0d3b2d5d.md5
+|   |       ������ײ������.wav-60aaef0b7dc904f4352ef34f0d3b2d5d.sample
+|   |       �����е���Ч.wav-344154f6bd9138271891367ed05c9c0a.md5
+|   |       �����е���Ч.wav-344154f6bd9138271891367ed05c9c0a.sample
+|   |       ��ײ�ܻ���Ч (2).wav-f278535f0dc234b87bbe459a8d9ee00c.md5
+|   |       ��ײ�ܻ���Ч (2).wav-f278535f0dc234b87bbe459a8d9ee00c.sample
+|   |       ��ײ�ܻ���Ч (3).wav-e2467ad0b7623f35b59b8941afc4e84d.md5
+|   |       ��ײ�ܻ���Ч (3).wav-e2467ad0b7623f35b59b8941afc4e84d.sample
+|   |       ��ײ�ܻ���Ч.wav-4e3202d94ae5fcc4675d9e508d669680.md5
+|   |       ��ײ�ܻ���Ч.wav-4e3202d94ae5fcc4675d9e508d669680.sample
+|   |       
+|   \---shader_cache
+|       +---CanvasOcclusionShaderGLES3
+|       |   \---b614e65166de0cc16224d77551388c259db2a953424ba6474e0691dc57d6f5e5
+|       +---CanvasSdfShaderGLES3
+|       |   \---a725aa9b1ed9234daa7ec2c61fcf573e37d0e5bca96d3fc8f03a7f9b69e35a55
+|       +---CanvasShaderGLES3
+|       |   \---88482a38fa9e00c021f772eccbf27f0751813a8cc75a7666ea9fc9dde7f4eb8b
+|       |           598974ba8eae5c404e65b9c934cc645d2e5aa463.cache
+|       |           6bb7c9a2fd1c4a8fa77cb96555b9b4a720209981.cache
+|       |           9ae08ef3e8f55cb78d87b359ee68b193a6485fca.cache
+|       |           b547968aa19902bd49de94fd81aaa8c91331c7dc.cache
+|       |           
+|       +---CopyShaderGLES3
+|       |   \---1b462b42a09013c0526221f0a00ef0e6de98b17efb6738b0c6384096dc7e944c
+|       |           6bb7c9a2fd1c4a8fa77cb96555b9b4a720209981.cache
+|       |           
+|       +---CubemapFilterShaderGLES3
+|       |   \---32aa9a9ed85d03fd1e33d883259c4c859a8c8279cf977a49172c1060af86aa1e
+|       |           6bb7c9a2fd1c4a8fa77cb96555b9b4a720209981.cache
+|       |           
+|       +---FeedShaderGLES3
+|       |   \---d807d0c0ca6ab3e1a5caaffde307bfa4c7493107ca21ed40ad269309ee56e31e
+|       |           6bb7c9a2fd1c4a8fa77cb96555b9b4a720209981.cache
+|       |           
+|       +---GlowShaderGLES3
+|       |   \---bee1c8569b7aa588917b729c734d3aa78556b1d1ba749549a22de694ae4f2622
+|       +---ParticlesCopyShaderGLES3
+|       |   \---be43a5813917220747311da986ffb091f64859ce8c2394298e147a2415a05f6b
+|       +---ParticlesShaderGLES3
+|       |   \---6d87a4b130cf7287f274ae4e85980aa356806c099f234dcb6aabc4f85ede8128
+|       +---PostShaderGLES3
+|       |   \---186f88e0dd56005c7232d779b82ec2237d06f0a9c8518c90b96b9bf5ec736d07
+|       |           6bb7c9a2fd1c4a8fa77cb96555b9b4a720209981.cache
+|       |           
+|       +---SceneShaderGLES3
+|       |   \---465984dd2155835f4863e4225e115ab075df2cc86a2d24fa18ce069441d1527b
+|       |           6bb7c9a2fd1c4a8fa77cb96555b9b4a720209981.cache
+|       |           a38af2d0725c8e99d8492f4c72736f24d6a54cc5.cache
+|       |           cafb1506f2db0c3681435e264aa18e216d1a7a40.cache
+|       |           
+|       +---SkeletonShaderGLES3
+|       |   \---34f2bdee4403d02798e49202022e32a743e04fdb1909380f330b23323fec8fa5
+|       \---SkyShaderGLES3
+|           \---d65e9566df4ab01519f7ad5ff26d27f8e9709b20c47326db44493d21c6119678
+|                   2c82eb5fea9b549e20c9f41e308abf9a4fc5d76f.cache
+|                   
+|   +---kenney_prototype_textures
+|   |   |   LICENSE.txt
+|   |   |   
+|   |   +---dark
+|   |   |       texture_01.png
+|   |   |       texture_02.png
+|   |   |       texture_03.png
+|   |   |       texture_04.png
+|   |   |       texture_05.png
+|   |   |       texture_06.png
+|   |   |       texture_07.png
+|   |   |       texture_08.png
+|   |   |       texture_09.png
+|   |   |       texture_10.png
+|   |   |       texture_11.png
+|   |   |       texture_12.png
+|   |   |       texture_13.png
+|   |   |       
+|   |   +---green
+|   |   |       texture_01.png
+|   |   |       texture_02.png
+|   |   |       texture_03.png
+|   |   |       texture_04.png
+|   |   |       texture_05.png
+|   |   |       texture_06.png
+|   |   |       texture_07.png
+|   |   |       texture_08.png
+|   |   |       texture_09.png
+|   |   |       texture_10.png
+|   |   |       texture_11.png
+|   |   |       texture_12.png
+|   |   |       texture_13.png
+|   |   |       
+|   |   +---light
+|   |   |       texture_01.png
+|   |   |       texture_02.png
+|   |   |       texture_03.png
+|   |   |       texture_04.png
+|   |   |       texture_05.png
+|   |   |       texture_06.png
+|   |   |       texture_07.png
+|   |   |       texture_08.png
+|   |   |       texture_09.png
+|   |   |       texture_10.png
+|   |   |       texture_11.png
+|   |   |       texture_12.png
+|   |   |       texture_13.png
+|   |   |       
+|   |   +---orange
+|   |   |       texture_01.png
+|   |   |       texture_02.png
+|   |   |       texture_03.png
+|   |   |       texture_04.png
+|   |   |       texture_05.png
+|   |   |       texture_06.png
+|   |   |       texture_07.png
+|   |   |       texture_08.png
+|   |   |       texture_09.png
+|   |   |       texture_10.png
+|   |   |       texture_11.png
+|   |   |       texture_12.png
+|   |   |       texture_13.png
+|   |   |       
+|   |   +---purple
+|   |   |       texture_01.png
+|   |   |       texture_02.png
+|   |   |       texture_03.png
+|   |   |       texture_04.png
+|   |   |       texture_05.png
+|   |   |       texture_06.png
+|   |   |       texture_07.png
+|   |   |       texture_08.png
+|   |   |       texture_09.png
+|   |   |       texture_10.png
+|   |   |       texture_11.png
+|   |   |       texture_12.png
+|   |   |       texture_13.png
+|   |   |       
+|   |   \---red
+|   |           texture_01.png
+|   |           texture_02.png
+|   |           texture_03.png
+|   |           texture_04.png
+|   |           texture_05.png
+|   |           texture_06.png
+|   |           texture_07.png
+|   |           texture_08.png
+|   |           texture_09.png
+|   |           texture_10.png
+|   |           texture_11.png
+|   |           texture_12.png
+|   |           texture_13.png
+|   |           
+|   +---protobuf
+|   |   |   gdprotobuf.gd
+|   |   |   gdprotobuf.gd.uid
+|   |   |   LICENSE
+|   |   |   plugin.cfg
+|   |   |   README.md
+|   |   |   README_zh.md
+|   |   |   
+|   |   +---example
+|   |   |   |   .gdignore
+|   |   |   |   directory.gd
+|   |   |   |   main.gd
+|   |   |   |   main.tscn
+|   |   |   |   Makefile
+|   |   |   |   syntax_check.gd
+|   |   |   |   
+|   |   |   +---http_client
+|   |   |   |       http_client.gd
+|   |   |   |       
+|   |   |   +---proto2
+|   |   |   |   |   complex.proto
+|   |   |   |   |   Makefile
+|   |   |   |   |   simple.proto
+|   |   |   |   |   test.proto
+|   |   |   |   |   
+|   |   |   |   +---generated
+|   |   |   |   |       complex.proto.gd
+|   |   |   |   |       simple.proto.gd
+|   |   |   |   |       test.proto.gd
+|   |   |   |   |       
+|   |   |   |   \---test
+|   |   |   |           test_complex_message.gd
+|   |   |   |           test_simple_message.gd
+|   |   |   |           
+|   |   |   \---proto3
+|   |   |       |   common.proto
+|   |   |       |   Makefile
+|   |   |       |   test.proto
+|   |   |       |   
+|   |   |       +---generated
+|   |   |       |       common.proto.gd
+|   |   |       |       test.proto.gd
+|   |   |       |       
+|   |   |       \---test
+|   |   |               proto_serialize.gd
+|   |   |               
+|   |   \---proto
+|   |           FieldDescriptor.gd
+|   |           FieldDescriptor.gd.uid
+|   |           GDScriptUtils.gd
+|   |           GDScriptUtils.gd.uid
+|   |           Message.gd
+|   |           Message.gd.uid
+|   |           Proto.gd
+|   |           Proto.gd.uid
+|   |           RepeatedArray.gd
+|   |           RepeatedArray.gd.uid
+|   |           
+|   \---virtual_joystick
+|       |   LICENSE
+|       |   plugin.cfg
+|       |   virtual_joystick.gd
+|       |   virtual_joystick.gd.uid
+|       |   virtual_joystick.tscn
+|       |   virtual_joystick_icon.svg
+|       |   virtual_joystick_plugin.gd
+|       |   virtual_joystick_plugin.gd.uid
+|       |   
+|       +---direction_utils
+|       |       direction_utils.gd
+|       |       direction_utils.gd.uid
+|       |       
+|       +---docs
+|       |       DIRECTION_UTILS.md
+|       |       DIRECTION_UTILS.pt.md
+|       |       VIRTUAL_JOYSTICK.md
+|       |       VIRTUAL_JOYSTICK.pt.md
+|       |       
+|       +---example
+|       |   +---joystick_settings
+|       |   |       joystick_settings.gd
+|       |   |       joystick_settings.gd.uid
+|       |   |       joystick_settings.tscn
+|       |   |       
+|       |   +---main_game
+|       |   |       main_game.gd
+|       |   |       main_game.gd.uid
+|       |   |       main_game.tscn
+|       |   |       tileset.png
+|       |   |       
+|       |   +---player
+|       |   |       player.gd
+|       |   |       player.gd.uid
+|       |   |       player.tscn
+|       |   |       players.png
+|       |   |       
+|       |   \---weapon
+|       |       |   weapon.gd
+|       |       |   weapon.gd.uid
+|       |       |   weapon.tscn
+|       |       |   weapons.png
+|       |       |   
+|       |       \---projectile
+|       |               projectile.gd
+|       |               projectile.gd.uid
+|       |               projectile.tscn
+|       |               
+|       \---textures
+|               base_texture.svg
+|               stick_texture.svg
+|               
++---assets
+|   +---map_picture
+|   |       arena_map_v2.jpg
+|   |       game_map.png
+|   |       
+|   +---music
+|   |   +---game
+|   |   |       clash_1.wav
+|   |   |       dash_1.wav
+|   |   |       dash_2.wav
+|   |   |       hit_1.wav
+|   |   |       hit_2.wav
+|   |   |       hit_3.wav
+|   |   |       ultimate_1.wav
+|   |   |       
+|   |   \---������Ч
+|   |           Cinematic_dark_scien_#2-1774509774533.wav
+|   |           Cinematic_dark_scien_#4-1774509774692.wav
+|   |           Create_a_stylized_GA_#2-1774508975214.wav
+|   |           
+|   \---player_picture
+|           devide.png
+|           Gemini_Generated_Image_yuj15lyuj15lyuj1.png
+|           LS20260321164248.png
+|           LS20260326144210.png
+|           LS20260326144210.png2146353358.tmp
+|           LS20260326144210.png2166608958.tmp
+|           LS20260326144405.png
+|           LS20260326144440.png
+|           LS20260326145007.png
+|           speed.png
+|           
++---docs
+|       project_tree.txt
+|       
++---proto
+|       game.proto
+|       
++---scene
+|   +---group_camera
+|   |       group_camera.gd
+|   |       group_camera.gd.uid
+|   |       group_camera.tscn
+|   |       
+|   +---main
+|   |       main.gd
+|   |       main.gd.uid
+|   |       Main.tscn
+|   |       
+|   +---map_arena
+|   |       map_arena.tscn
+|   |       
+|   \---player
+|       |   player.gd
+|       |   player.gd.uid
+|       |   player.tscn
+|       |   
+|       \---roles
+|               role1_speedster.gd
+|               role1_speedster.gd.uid
+|               role3_reviver.gd
+|               role3_reviver.gd.uid
+|               
+\---scripts
+        AudioManager.gd
+        AudioManager.gd.uid
+        BattleWsClient.gd
+        BattleWsClient.gd.uid
+        GameManager.gd
+        GameManager.gd.uid
+        ProtoParser.gd
+        ProtoParser.gd.uid
+        

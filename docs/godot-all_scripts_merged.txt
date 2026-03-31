@@ -1,0 +1,1894 @@
+﻿
+--- FILE: \proto\game.proto ---
+
+syntax = "proto3";
+
+// 生成的 Go 代码所在的包名
+package proto;
+option go_package = "./proto";
+
+// 定义统一的消息包（替代之前的 GameMessage JSON）
+message GameMessage {
+    string type = 1;     // 消息类型: chat, move, init, leave, match_req, match_success
+    uint32 user_id = 2;  // 玩家 ID
+    string content = 3;  // 聊天内容
+    float x = 4;         // 坐标 X
+    float y = 5;         // 坐标 Y
+    float z = 6;         // 坐标 Z
+    
+    // 列表类型：用于同步历史记录或玩家列表
+    repeated PlayerPos players = 7;
+    repeated ChatLog history = 8;
+
+    // 修改内容：新增基于强类型的房间ID字段
+    // 修改原因：支持基于房间的物理隔离广播与对局，大厅聊天与房间隔离
+    string room_id = 9;
+
+    // ===== 新增代码 START =====
+    // 修改内容：新增朝向同步字段 rot_y，用于远端玩家丝滑旋转同步与多帧视觉稳定
+    // 修改原因：在 move 类消息中附带 transform.eulerAngles.y，避免远端旋转出现轻微卡顿
+    // 影响范围：仅影响 move/同步类消息；大厅未必填充该字段
+    float rot_y = 10;
+    // ===== 新增代码 END =====
+}
+
+message PlayerPos {
+    uint32 user_id = 1;
+    float x = 2;
+    float y = 3;
+    float z = 4;
+    float rot_y = 5;
+}
+
+message ChatLog {
+    string sender = 1;
+    string content = 2;
+}
+
+--- FILE: \scene\group_camera\group_camera.gd ---
+
+extends Camera2D
+
+# 缩放限制配置 
+var min_zoom: float = 0.6  # 离得最远时的视野
+var max_zoom: float = 5.2  # 离得最近时的视野（提升特写倍数！）
+var margin: Vector2 = Vector2(300.0, 300.0) 
+
+# --- 新增：相机平滑速度配置 ---
+var follow_speed: float = 18.0  # 把这个值调大，相机移动就越快（推荐 10-20）
+
+# --- 屏幕震动参数 (可在 Godot 检查器中随时调参) ---
+@export var shake_decay: float = 30.0  # 震动衰减速度（越大停得越快）
+var shake_strength: float = 0.0        # 当前震动强度
+
+
+func track_targets(players_dict: Dictionary, delta: float) -> void:
+	if players_dict.is_empty():
+		return
+		
+	var center_pos := Vector2.ZERO
+	
+	if players_dict.size() == 1:
+		var only_p: Node2D = players_dict.values()[0] as Node2D
+		global_position = global_position.lerp(only_p.global_position, 5.0 * delta)
+		zoom = zoom.lerp(Vector2(max_zoom, max_zoom), 5.0 * delta)
+		return
+		
+	var min_pos := Vector2(INF, INF)
+	var max_pos := Vector2(-INF, -INF)
+
+	for uid in players_dict:
+		var p_node: Node2D = players_dict[uid] as Node2D
+		var pos := p_node.global_position
+		center_pos += pos
+		
+		# 使用强类型的 minf 和 maxf，消灭 Variant 报错
+		min_pos.x = minf(min_pos.x, pos.x)
+		min_pos.y = minf(min_pos.y, pos.y)
+		max_pos.x = maxf(max_pos.x, pos.x)
+		max_pos.y = maxf(max_pos.y, pos.y)
+
+	center_pos /= players_dict.size()
+	
+	global_position = global_position.lerp(center_pos, 5.0 * delta)
+
+	var rect_size := max_pos - min_pos 
+	var screen_size := get_viewport_rect().size - margin 
+	
+	var zoom_x: float = screen_size.x / maxf(rect_size.x, 1.0)
+	var zoom_y: float = screen_size.y / maxf(rect_size.y, 1.0)
+	
+	# 【彻底解决报错的地方】：强行指定为 float 并且使用 float 专用的数学函数
+	var target_zoom_val: float = minf(zoom_x, zoom_y)
+	target_zoom_val = clampf(target_zoom_val, min_zoom, max_zoom)
+	
+	var target_zoom := Vector2(target_zoom_val, target_zoom_val)
+	
+	zoom = zoom.lerp(target_zoom, 5.0 * delta)
+
+	# --- 应用屏幕震动偏移 ---
+	if shake_strength > 0.0:
+		var random_offset := Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)).normalized()
+		offset = random_offset * shake_strength
+		shake_strength = lerpf(shake_strength, 0.0, shake_decay * delta)
+	else:
+		offset = Vector2.ZERO
+
+func apply_shake(intensity: float) -> void:
+	# 叠加震动强度，防止连续受击震动被覆盖
+	shake_strength = maxf(shake_strength, intensity)
+
+--- FILE: \scene\main\main.gd ---
+
+extends Node2D
+
+var players: Dictionary = {}
+var player_scene: PackedScene = preload("res://scene/player/player.tscn")
+var local_player_spawned: bool = false
+var initial_pos_sent: bool = false # 【保留字段】兼容旧逻辑，当前权威模式下不再发送初始坐标
+
+@onready var group_camera = $GroupCamera 
+
+func _ready() -> void:
+	if not BattleWsClient.network_message.is_connected(_on_network_message):
+		BattleWsClient.network_message.connect(_on_network_message)
+
+func _process(delta: float) -> void:
+	_check_and_spawn_local_player()
+	# 服务端权威模式：本地位置不再主动上送，改由 Player 每帧上行输入指令
+	if local_player_spawned and not initial_pos_sent:
+		initial_pos_sent = true
+
+	if group_camera != null:
+		if group_camera.has_method("track_targets"):
+			group_camera.track_targets(players, delta)
+
+func _check_and_spawn_local_player() -> void:
+	if local_player_spawned: return
+	if not has_node("/root/GameManager"): return
+	
+	var gm := get_node("/root/GameManager")
+	if gm != null and gm.user_id != 0:
+		local_player_spawned = true
+		var player: Node = player_scene.instantiate()
+		player.is_local_player = true
+		player.uid = gm.user_id
+		player.add_to_group("players")
+		add_child(player)
+		players[gm.user_id] = player
+		print("[Main] 本地玩家已部署，UID: ", gm.user_id)
+
+		# 告诉 React 前端：场景已经完全加载并生成角色，可以撤下加载面板并开始倒计时了！
+		if gm.has_method("notify_react"):
+			gm.notify_react("engine_ready")
+
+func _on_network_message(msg: Dictionary) -> void:
+	var msg_type: String = str(msg.get("type", ""))
+	if msg_type == "state":
+		# ===== 新增代码 START =====
+		# 修改内容：接收服务端权威 state 快照并逐个玩家分发
+		# 修改原因：从“直接同步坐标”升级为“服务端状态快照驱动”
+		# 影响范围：战斗场景内所有玩家实体的网络状态刷新
+		var gm = get_node_or_null("/root/GameManager")
+		var state_players = msg.get("players", [])
+		if state_players is Array:
+			for raw_player in state_players:
+				if not (raw_player is Dictionary):
+					continue
+				var p: Dictionary = raw_player
+				var uid: int = int(p.get("user_id", 0))
+				if uid == 0:
+					continue
+
+				# 若快照内玩家尚未实例化，立即补生成（支持晚进房/断线重连）
+				if not players.has(uid):
+					var instance: Node = player_scene.instantiate()
+					instance.is_local_player = (gm != null and uid == int(gm.user_id))
+					instance.uid = uid
+					instance.add_to_group("players")
+					add_child(instance)
+					players[uid] = instance
+
+				var player_node: Node = players[uid]
+				var px: float = float(p.get("x", 0.0))
+				var pz: float = float(p.get("z", 0.0))
+				var rot_y: float = float(p.get("rot_y", 0.0))
+				var server_state: int = int(p.get("current_state", 0))
+				var server_hp: int = int(p.get("hp", 100))
+				var server_energy: int = int(p.get("energy", 0))
+
+				if player_node.has_method("update_network_state"):
+					player_node.update_network_state(px, pz, rot_y, server_state, server_hp, server_energy)
+		# ===== 新增代码 END =====
+	elif msg_type == "room_info":
+		# 接收 Go 后端下发的双端职业情报
+		var gm = get_node_or_null("/root/GameManager")
+		if gm:
+			if not ("room_classes" in gm):
+				gm.set("room_classes", {}) # 动态防御机制
+			
+			var p1_id = int(msg.get("p1_id", 0))
+			var p2_id = int(msg.get("p2_id", 0))
+			if p1_id != 0: gm.room_classes[p1_id] = str(msg.get("p1_class", ""))
+			if p2_id != 0: gm.room_classes[p2_id] = str(msg.get("p2_class", ""))
+			
+			# 情报到达，通知场景中已存在的玩家立刻加载职业组件 (MOD)
+			for p_uid in players:
+				if players[p_uid].has_method("apply_class_visuals"):
+					players[p_uid].apply_class_visuals()
+	elif msg_type == "game_over":
+		# ===== 新增代码 START =====
+		# 修改内容：拦截服务端 game_over 信号，触发子弹时间慢动作并在演出结束后通知 React
+		# 修改原因：让客户端在胜负仲裁后播放 0.2 倍速结算特写，并在 1 秒（真实时间）后回调前端
+		# 影响范围：仅影响 game_over 消息的演出与 UI 通知，不改变 state/opponent_left 分支行为
+		var winner_id: int = int(msg.get("user_id", 0))
+		print("[Main] 收到游戏结束信号，胜利者：", winner_id)
+
+		# 1. 触发绝杀子弹时间 (全引擎 0.2 倍速慢动作)
+		Engine.time_scale = 0.2
+
+		# 2. 创建一个无视 time_scale 的真实世界定时器
+		#    等待 1 秒真实时间（相当于慢动作下额外拉长演出观感）
+		var timer := get_tree().create_timer(1.0, true, false, true)
+		timer.timeout.connect(func():
+			# 演出结束，恢复时间流速
+			Engine.time_scale = 1.0
+
+			# 将胜利者信息推给 React 网页
+			var gm = get_node_or_null("/root/GameManager")
+			if gm and gm.has_method("notify_react"):
+				var payload := { "winner_id": winner_id }
+				gm.notify_react("game_over", JSON.stringify(payload))
+		)
+		# ===== 新增代码 END =====
+	elif msg_type == "opponent_left":
+		var user_id: int = int(msg.get("user_id", 0))
+		if players.has(user_id):
+			var node: Node = players[user_id]
+			players.erase(user_id)
+			if is_instance_valid(node):
+				node.queue_free()
+
+--- FILE: \scene\player\roles\role1_speedster.gd ---
+
+extends Node
+
+var active_buff_timer: float = 0.0
+var _was_buffed: bool = false
+var _player: CharacterBody2D
+var _visuals: Node2D
+var _head: Node2D
+var _body: Node2D
+var _weapon: Node2D # 虽然这里不操作它旋转，但保留引用
+var _last_state: int = -1
+var _tween: Tween
+var _trail: CPUParticles2D = null
+
+func init_role(player_node: CharacterBody2D) -> void:
+	_player = player_node
+
+# 精准获取截图中的节点
+func apply_visuals(player: CharacterBody2D, visuals_node: Node2D) -> void:
+	_visuals = visuals_node
+	# 使用 _visuals.get_node 干净地获取截图里对应的 Sprite2D
+	_head = _visuals.get_node("Head") as Node2D
+	_body = _visuals.get_node("Body") as Node2D
+	_weapon = _visuals.get_node("Weapon") as Node2D
+
+	# 纯代码动态生成渐变拖尾，杜绝 Null 崩溃报错
+	_trail = CPUParticles2D.new()
+	_trail.name = "SpeedsterTrail"
+	_trail.amount = 40
+	_trail.lifetime = 0.5
+	_trail.gravity = Vector2.ZERO
+	_trail.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	_trail.emission_sphere_radius = 20.0
+	_trail.direction = Vector2(-1, 0)
+	_trail.spread = 15.0
+	_trail.initial_velocity_min = 50.0
+	_trail.initial_velocity_max = 100.0
+	_trail.local_coords = false
+
+	var grad = Gradient.new()
+	grad.add_point(0.0, Color(1.0, 0.7, 0.8, 1.0))
+	grad.add_point(0.5, Color(0.8, 0.4, 0.9, 0.8))
+	grad.add_point(1.0, Color(0.6, 0.1, 0.8, 0.0))
+	_trail.color_ramp = grad
+
+	var curve = Curve.new()
+	curve.add_point(Vector2(0, 1.0))
+	curve.add_point(Vector2(1, 0.0))
+	_trail.scale_amount_curve = curve
+	_trail.scale_amount_min = 6.0
+	_trail.scale_amount_max = 12.0
+
+	visuals_node.add_child(_trail)
+	_trail.emitting = false
+
+# 大招紫光Buff (非受击状态下覆盖)
+func _physics_process(delta: float) -> void:
+	if active_buff_timer > 0.0:
+		active_buff_timer -= delta
+		_was_buffed = true
+		if _last_state != 7 and _visuals:
+			_visuals.modulate = Color(1.5, 0.5, 1.5)
+	else:
+		if _was_buffed:
+			_was_buffed = false
+			if _last_state != 7 and _visuals:
+				_visuals.modulate = Color(1.0, 1.0, 1.0)
+
+# Q 技能接口
+func on_cast_ultimate() -> void:
+	active_buff_timer = 15.0
+
+func has_speed_buff() -> bool:
+	return active_buff_timer > 0.0
+
+# 核心：使用现有的 Body, Head 节点做肉感动画，不碰武器旋转
+func update_animation(current_state: int) -> void:
+	if current_state == _last_state: return
+	_last_state = current_state
+	# 安全校验：防止节点还没加载时报错
+	if not _body or not _head: return
+
+	if _tween: _tween.kill()
+
+	# 【重要 Debug】：我们不能 Tween "_visuals.scale:x" (会导致朝向错误)
+	# 只能 Tween 它的子节点 _body, _head 来体现缩放。
+
+	match current_state:
+		0, 6: # IDLE, POST_CAST (呼吸动画)
+			if _trail: _trail.emitting = false
+			_tween = create_tween().set_loops().set_parallel(true)
+			_tween.tween_property(_body, "scale:y", 0.95, 0.4).set_ease(Tween.EASE_IN_OUT)
+			_tween.tween_property(_body, "scale:y", 1.0, 0.4).set_delay(0.4)
+			_tween.tween_property(_head, "position:y", 1.0, 0.4).set_delay(0.4) # 头部跟随弹弹跳
+		1, 2: # MOVE, CHARGING (快速奔跑弹跳)
+			if _trail: _trail.emitting = true
+			_tween = create_tween().set_loops().set_parallel(true)
+			_tween.tween_property(_body, "scale:y", 1.05, 0.15)
+			_tween.tween_property(_body, "scale:x", 0.95, 0.15)
+			_tween.tween_property(_body, "scale:y", 1.0, 0.15).set_delay(0.15)
+			_tween.tween_property(_body, "scale:x", 1.0, 0.15).set_delay(0.15)
+		3: # DASHING
+			if _trail: _trail.emitting = true
+		7: # HIT_STUN (干净利落的受击闪红)
+			if _trail: _trail.emitting = false
+			_tween = create_tween().set_parallel(true)
+			# 此状态由 player.gd 预测锁保护
+			_visuals.modulate = Color(3.0, 0.2, 0.2)
+
+			# 受击时不仅闪红，还把 Body squash 一下
+			_tween.tween_property(_body, "scale", Vector2(0.8, 0.8), 0.1)
+			_tween.tween_property(_body, "scale", Vector2(1.0, 1.0), 0.3).set_delay(0.1)
+
+			get_tree().create_timer(0.2).timeout.connect(func():
+				# 退出闪红时的 modulate 安全恢复
+				if _last_state == 7 and _visuals:
+					_visuals.modulate = Color(1.5, 0.5, 1.5) if active_buff_timer > 0 else Color(1.0, 1.0, 1.0)
+			)
+
+--- FILE: \scene\player\roles\role3_reviver.gd ---
+
+extends Node
+
+var active_buff_timer: float = 0.0
+var _player: CharacterBody2D
+var _visuals: Node2D
+var _head: Node2D
+var _body: Node2D
+var _weapon: Node2D
+var _last_state: int = -1
+var _tween: Tween
+
+func init_role(player_node: CharacterBody2D) -> void:
+	_player = player_node
+
+func apply_visuals(player: CharacterBody2D, visuals_node: Node2D) -> void:
+	_visuals = visuals_node
+	_head = _visuals.get_node_or_null("Head") as Node2D
+	_body = _visuals.get_node_or_null("Body") as Node2D
+	_weapon = _visuals.get_node_or_null("Weapon") as Node2D
+
+	var aura = CPUParticles2D.new()
+	aura.name = "ReviverAura"
+	aura.amount = 20
+	aura.lifetime = 1.2
+	aura.gravity = Vector2(0, -30)
+	aura.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	aura.emission_sphere_radius = 35.0
+	aura.local_coords = false # 让光环在走动时有拖拽感
+
+	var grad = Gradient.new()
+	grad.add_point(0.0, Color(0.0, 0.9, 0.2, 0.8))
+	grad.add_point(1.0, Color(0.0, 0.9, 0.2, 0.0))
+	aura.color_ramp = grad
+
+	var curve = Curve.new()
+	curve.add_point(Vector2(0, 0.5))
+	curve.add_point(Vector2(0.5, 1.5))
+	curve.add_point(Vector2(1, 0.0))
+	aura.scale_amount_curve = curve
+	aura.scale_amount_min = 5.0
+	aura.scale_amount_max = 10.0
+
+	visuals_node.add_child(aura)
+
+func _physics_process(delta: float) -> void:
+	if active_buff_timer > 0.0:
+		active_buff_timer -= delta
+	
+	# 【核心修复】：如果正在受击闪红，暂停每帧的颜色覆盖！
+	if _last_state == 7: # 7 是 State.HIT_STUN
+		return
+
+	if active_buff_timer > 0.0:
+		if _player and _player._visuals:
+			_player._visuals.modulate = Color(0.7, 1.2, 0.7) # 发绿
+	else:
+		if _player and _player._visuals:
+			_player._visuals.modulate = Color(1.0, 1.0, 1.0)
+
+# 本地释放大招时的预测与表现
+func on_cast_ultimate() -> void:
+	active_buff_timer = 15.0
+
+# 复苏者专属动画逻辑：轻柔、施法感
+func update_animation(current_state: int) -> void:
+	if current_state == _last_state: return
+	_last_state = current_state
+	if not _body or not _weapon: return
+
+	if _tween: _tween.kill()
+
+	match current_state:
+		0, 6: # IDLE, POST_CAST (缓慢呼吸)
+			_tween = create_tween().set_loops().set_parallel(true)
+			_tween.tween_property(_body, "scale:y", 0.98, 0.6).set_ease(Tween.EASE_IN_OUT)
+			_tween.tween_property(_body, "scale:y", 1.0, 0.6).set_delay(0.6)
+			_tween.tween_property(_weapon, "rotation_degrees", 0.0, 0.3)
+		1, 2: # MOVE, CHARGING (轻盈飘动)
+			_tween = create_tween().set_loops().set_parallel(true)
+			_tween.tween_property(_body, "position:y", -4.0, 0.25).set_ease(Tween.EASE_OUT)
+			_tween.tween_property(_body, "position:y", 0.0, 0.25).set_delay(0.25).set_ease(Tween.EASE_IN)
+			_tween.tween_property(_weapon, "rotation_degrees", -15.0, 0.25)
+			_tween.tween_property(_weapon, "rotation_degrees", 0.0, 0.25).set_delay(0.25)
+		5, 4, 8: # PRE_CAST, ATTACK, SKILL_CAST (法杖小幅度点指)
+			_tween = create_tween().set_parallel(true)
+			_tween.tween_property(_weapon, "rotation_degrees", 60.0, 0.15).set_ease(Tween.EASE_OUT)
+		7: # HIT_STUN
+			_tween = create_tween().set_parallel(true)
+			_visuals.modulate = Color(3.0, 0.2, 0.2)
+			_tween.tween_property(_visuals, "scale", Vector2(0.85, 0.85), 0.1)
+			_tween.tween_property(_visuals, "scale", Vector2(1.0, 1.0), 0.3).set_delay(0.1)
+			get_tree().create_timer(0.2).timeout.connect(func(): _visuals.modulate = Color(1, 1, 1))
+
+--- FILE: \scene\player\player.gd ---
+
+extends CharacterBody2D
+
+# ==============================================================================
+# 🎮 战斗与状态调参控制台 (Game Feel / Physics Tuning)
+# 注意：以下所有物理与时间参数，必须与 Go 服务端 (player_state.go) 严格保持 1:1 对齐！
+# ==============================================================================
+
+# --- [移动与摩擦力系统] ---
+const BASE_SPEED: float = 200.0               # 常规跑动满速 (像素/秒)
+const CHARGE_SPEED_MULTIPLIER: float = 0.3    # 蓄力移速惩罚：0.3 代表按住左键时，移速降为正常的 30%
+const ACCEL_TIME: float = 0.30                # 起步惯性：提速到满速需要的时间(秒)，体现肉感
+const WEAPON_CHARGE_ROT: float = -35.0        # 蓄力时刀的旋转角度（负数为逆时针）
+const DASH_FRICTION: float = 18.0             # 冲刺阻力：值越大，冲出去后刹车越快；值越小，滑行越远
+const HIT_STUN_FRICTION: float = 8.0          # 受击摩擦力：值较小，体现被打飞后在地上痛苦滑行的平滑感
+
+# --- [蓄力与冲刺突进系统] ---
+const MAX_CHARGE_TIME: float = 3.5            # 强制过载：按住左键超过 3.5 秒，强制触发冲刺
+const MAX_EFFECTIVE_CHARGE_TIME: float = 2.5  # 充能上限：最多只算 2.5 秒的收益，防止无限蓄力飞出地图
+const DASH_DIST_MULTIPLIER: float = 1.5       # 距离放大器：决定蓄力时间转换成冲刺距离的“性价比”
+const DASH_DURATION: float = 0.3              # 冲刺伤害判定窗口 (秒)
+const DASH_POST_CAST: float = 0.5             # 冲刺结束后的“僵直喘息时间” (后摇)
+
+# --- [普攻动作时间轴] ---
+const ATTACK_PRE_CAST: float = 0.1            # 攻击前摇：按下攻击到实际挥出刀的短暂延迟
+const ATTACK_DURATION: float = 0.05           # 伤害判定窗口：刀刃具有伤害的极短瞬间
+const ATTACK_POST_CAST_MISS: float = 0.5      # 挥空惩罚：没砍中人时，自身陷入较长的收招硬直
+const ATTACK_POST_CAST_HIT: float = 0.3       # 命中奖励：砍中人后，因为“卡肉”，收招硬直变短，方便连招
+
+# --- [受击与击退系统] ---
+const HIT_STUN_NORMAL: float = 0.4            # 普攻受击硬直：被平A砍中后无法动弹的时间
+const HIT_STUN_CLASH: float = 0.5             # 拼刀受击硬直：互撞拼刀后，双方陷入更长的僵直
+const KNOCKBACK_SPEED: float = 1600.0         # 击退初速度：被打飞瞬间的爆发速度 (配合摩擦力产生滑行)
+const MELEE_RADIUS: float = 150.0             # 普攻扇形的有效砍击半径
+const DASH_HIT_RADIUS: float = 60.0           # 冲刺时肉身撞击的碰撞判定半径
+
+# --- [打击感视觉特效 (Screen Shake & Hit-Stop)] ---
+const SHAKE_INTENSITY_CLASH: float = 30.0     # 拼刀震幅：发生拼刀时屏幕的剧烈撕裂程度
+const SHAKE_INTENSITY_NORMAL: float = 15.0    # 普攻震幅：平A命中时的中度震动
+const HIT_STOP_TIMESCALE: float = 0.05        # 卡肉定格：命中瞬间世界时间降至 5%，模拟刀刃卡在骨肉中的阻力
+const HIT_STOP_DURATION_CLASH: float = 0.15   # 拼刀卡肉真实时长 (秒)
+const HIT_STOP_DURATION_NORMAL: float = 0.08  # 普攻卡肉真实时长 (秒)
+
+# --- 状态机：记录角色当前在做什么 ---
+enum State { IDLE, MOVE, CHARGING, DASHING, ATTACK, PRE_CAST, POST_CAST, HIT_STUN, SKILL_CAST, DEAD }
+var current_state: State = State.IDLE
+
+var is_local_player: bool = false # 是否为玩家本人
+var uid: int = 0                  # 玩家唯一ID
+var hp: int = 100                 # 生命值
+var energy: int = 0               # 终极技能能量值
+
+var target_pos: Vector2 = Vector2.ZERO # 网络同步的目标位置
+var target_rot: float = 0.0            # 网络同步的目标旋转
+
+var charge_timer: float = 0.0          # 计时器：记录按住左键了多久
+var prediction_lock_timer: float = 0.0 # 预测锁：防止被旧的服务器快照错误拉回
+var role_mechanic: Node = null
+var _q_pressed_last_frame: bool = false
+var _my_class_id: String = ""
+
+# --- 指令预输入系统 (Input Buffer) ---
+var _input_buffer: String = ""    
+var _buffer_timer: float = 0.0    
+const BUFFER_MAX_TIME: float = 0.25 
+
+@onready var _visuals: Node2D = $Visuals   
+var _ui_container: Node2D = null  
+var _name_label: Label = null              
+var _hp_bar: ProgressBar = null            
+
+var _hitbox_area: Area2D = null
+var _hitbox_polygon: CollisionPolygon2D = null
+var _attack_hit_targets: Array[CharacterBody2D] = []
+
+var _charge_pivot: Node2D = null
+var _move_joystick: VirtualJoystick = null
+var _attack_joystick: VirtualJoystick = null
+var _attack_joy_dir_cache: Vector2 = Vector2.ZERO
+# ===== 新增：合并的视觉表现变量 =====
+var _head: Node2D
+var _body: Node2D
+var _weapon: Node2D
+var _trail: CPUParticles2D
+var _role_tween: Tween
+var active_buff_timer: float = 0.0
+var _was_buffed: bool = false
+var _last_anim_state: int = -1
+# 新增：记住编辑器里的初始位置和缩放，防止动画让部件乱飞
+var _base_head_pos_y: float = 0.0
+var _base_body_scale: Vector2 = Vector2.ONE
+var _base_weapon_pos_y: float = 0.0
+var _base_weapon_rot: float = 0.0
+var _base_visuals_scale_x: float = 1.0
+
+func _ready() -> void:
+	_build_dynamic_ui()              
+	_build_hitbox_area()             
+	_build_charge_indicator()        
+	# 【强制挂载】绕过网络，强制在本节点初始化极速者特效
+	_setup_integrated_visuals()
+	if is_local_player:
+		var mobile_controls := get_node_or_null("/root/Main/MobileControls")
+		if mobile_controls:
+			_move_joystick = mobile_controls.get_node_or_null("MoveJoystick") as VirtualJoystick
+			_attack_joystick = mobile_controls.get_node_or_null("AttackJoystick") as VirtualJoystick
+			mobile_controls.show()
+			var gm := get_node_or_null("/root/GameManager")
+			set_mobile_mode(gm.is_mobile if gm else false)
+
+func set_mobile_mode(is_mobile: bool) -> void:
+	if not is_local_player:
+		return
+	var mobile_controls := get_node_or_null("/root/Main/MobileControls")
+	if mobile_controls:
+		mobile_controls.show()
+	_apply_joystick_scale(is_mobile)
+
+func _apply_joystick_scale(from_js_mobile: bool) -> void:
+	var os_mobile := OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")
+	var use_large := os_mobile or from_js_mobile
+	var s := 1.5 if use_large else 0.4
+	if _move_joystick:
+		_move_joystick.joystick_scale = s
+	if _attack_joystick:
+		_attack_joystick.joystick_scale = s
+
+func can_move() -> bool:
+	return current_state == State.IDLE or current_state == State.MOVE or current_state == State.CHARGING
+
+func can_be_interrupted() -> bool:
+	return current_state != State.SKILL_CAST and current_state != State.DEAD
+
+# ==========================================
+# 每帧 物理与移动处理
+# ==========================================
+func _physics_process(delta: float) -> void:
+	if prediction_lock_timer > 0.0:
+		prediction_lock_timer -= delta
+	_ensure_ui_not_mirrored()
+	
+	if is_local_player:
+		_handle_local_input(delta)
+	else:
+		_handle_remote_interpolation(delta)
+	
+	# 只要状态变了，就调用这个
+	_update_role_animation(current_state)
+	
+	# --- 强制两人左右对望 (取代随鼠标翻转/旋转) ---
+	if _visuals:
+		_visuals.rotation = 0.0 # 本地也彻底干掉旋转
+		var opponents = get_tree().get_nodes_in_group("players")
+		for opp in opponents:
+			if opp != self:
+				# 如果对手在右边，我面朝右；对手在左，我面朝左
+				if opp.global_position.x > global_position.x:
+					_visuals.scale.x = abs(_visuals.scale.x) * _base_visuals_scale_x
+				else:
+					_visuals.scale.x = -abs(_visuals.scale.x) * _base_visuals_scale_x
+				break
+		
+# 处理玩家的操作指令
+func _handle_local_input(delta: float) -> void:
+	# 开局冻结：等待 React 前端倒计时结束发送 startFight 信号
+	var gm = get_node_or_null("/root/GameManager")
+	if gm and not gm.is_fight_started:
+		return
+
+	# --- 0. 指令缓存 (Input Buffer) 倒计时与执行 ---
+	if _buffer_timer > 0.0:
+		_buffer_timer -= delta
+		if _buffer_timer <= 0.0:
+			_input_buffer = "" 
+			
+	if current_state == State.IDLE and _input_buffer == "attack":
+		_input_buffer = ""
+		_buffer_timer = 0.0
+		_start_attack()
+
+	var input_dir: Vector2 = Vector2.ZERO
+	if _move_joystick and _move_joystick.is_pressed:
+		input_dir = _move_joystick.output
+		if input_dir != Vector2.ZERO:
+			input_dir = input_dir.normalized()
+	else:
+		var left: bool = Input.is_physical_key_pressed(KEY_A) or Input.is_action_pressed("ui_left")
+		var right: bool = Input.is_physical_key_pressed(KEY_D) or Input.is_action_pressed("ui_right")
+		var up: bool = Input.is_physical_key_pressed(KEY_W) or Input.is_action_pressed("ui_up")
+		var down: bool = Input.is_physical_key_pressed(KEY_S) or Input.is_action_pressed("ui_down")
+		input_dir = Vector2(float(right) - float(left), float(down) - float(up)).normalized()
+	
+	# --- 1. 常规挥砍 (F 键 / 鼠标右键) ---
+	var attack_just_pressed: bool = Input.is_action_just_pressed("attack") or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or Input.is_physical_key_pressed(KEY_F)
+	if attack_just_pressed:
+		if can_move():
+			_start_attack()
+		else:
+			_input_buffer = "attack"
+			_buffer_timer = BUFFER_MAX_TIME
+
+	# --- 大招触发 (Q 键单次触发防连发) ---
+	var q_pressed: bool = Input.is_physical_key_pressed(KEY_Q)
+	var q_just_pressed: bool = q_pressed and not _q_pressed_last_frame
+	_q_pressed_last_frame = q_pressed
+
+	if q_just_pressed and energy >= 15 and can_move():
+		var ws = get_node_or_null("/root/BattleWsClient")
+		if ws and ws.has_method("send_ultimate"):
+			ws.send_ultimate()
+			energy = 0
+			current_state = State.SKILL_CAST
+			active_buff_timer = 15.0
+			AudioManager.play_sfx("ultimate", 2.0, false)
+
+			# 【核心修复 1】本地预测大招释放前摇硬直 (0.1秒)，与 Go 服务端完美对齐
+			get_tree().create_timer(0.1).timeout.connect(func():
+				if current_state == State.SKILL_CAST:
+					current_state = State.IDLE
+			)
+
+	var is_charging_mouse: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	var is_charging_joystick: bool = false
+	var attack_dir: Vector2 = Vector2.ZERO
+	if _attack_joystick and _attack_joystick.is_pressed:
+		is_charging_joystick = true
+		attack_dir = _attack_joystick.output
+		if attack_dir != Vector2.ZERO:
+			_attack_joy_dir_cache = attack_dir
+	elif is_charging_mouse:
+		_attack_joy_dir_cache = Vector2.ZERO
+	var is_charging_now: bool = is_charging_mouse or is_charging_joystick
+
+	# --- 2. 鼠标左键 / 右摇杆 两段式蓄力逻辑 ---
+	if can_move():
+		if is_charging_now:
+			current_state = State.CHARGING
+			var charge_rate: float = 1.5 if has_speed_buff() else 1.0
+			charge_timer += delta * charge_rate
+			
+			# 【极限阈值】：捏了 3.5 秒，强制开火！
+			if charge_timer >= MAX_CHARGE_TIME:
+				_charge_pivot.hide()
+				_execute_charge_dash(attack_dir)
+			else:
+				if not _charge_pivot.visible:
+					_charge_pivot.show()
+				
+				if is_charging_joystick and attack_dir != Vector2.ZERO:
+					_charge_pivot.rotation = attack_dir.angle()
+				else:
+					_charge_pivot.look_at(get_global_mouse_position())
+				
+				# 【有效时长】：距离计算最高封顶 2.5 秒
+				var effective_time: float = minf(charge_timer, MAX_EFFECTIVE_CHARGE_TIME)
+				var distance: float = effective_time * (BASE_SPEED * DASH_DIST_MULTIPLIER)
+				_charge_pivot.scale.x = maxf(0.2, distance / 100.0)
+			
+		elif current_state == State.CHARGING and not is_charging_now:
+			_charge_pivot.hide()
+			var joy_release_aim: Vector2 = attack_dir
+			if joy_release_aim == Vector2.ZERO:
+				joy_release_aim = _attack_joy_dir_cache
+			_attack_joy_dir_cache = Vector2.ZERO
+			_execute_charge_dash(joy_release_aim)
+			
+		elif current_state != State.DASHING and current_state != State.POST_CAST:
+			if input_dir != Vector2.ZERO:
+				current_state = State.MOVE
+			else:
+				current_state = State.IDLE
+
+	if not can_move():
+		input_dir = Vector2.ZERO
+		
+	# --- 3. 双轨制速度算法 ---
+	if current_state == State.HIT_STUN or current_state == State.DEAD:
+		velocity = velocity.lerp(Vector2.ZERO, HIT_STUN_FRICTION * delta)
+	elif current_state == State.DASHING:
+		velocity = velocity.lerp(Vector2.ZERO, DASH_FRICTION * delta)
+	else:
+		# 轨道 B：常规移动 (起步快 1.5 倍)
+		var current_max_speed: float = BASE_SPEED
+		if current_state == State.CHARGING:
+			current_max_speed = BASE_SPEED * CHARGE_SPEED_MULTIPLIER
+			
+		var target_velocity: Vector2 = input_dir * current_max_speed
+		var accel_step: float = (BASE_SPEED / ACCEL_TIME) * delta
+		
+		var linear_target := Vector2.ZERO
+		if input_dir == Vector2.ZERO:
+			linear_target = velocity.move_toward(Vector2.ZERO, accel_step)
+		else:
+			if velocity != Vector2.ZERO and input_dir.dot(velocity.normalized()) < 0:
+				accel_step *= 4.0 
+			linear_target = velocity.move_toward(target_velocity, accel_step)
+			
+		velocity = velocity.lerp(linear_target, 25.0 * delta)
+
+	move_and_slide()
+
+	# 冲刺肉搏预测：纯数学距离检测，彻底告别物理穿模！
+	if is_local_player and current_state == State.DASHING:
+		for target in get_tree().get_nodes_in_group("players"):
+			if target != self and target is CharacterBody2D:
+				if global_position.distance_to(target.global_position) <= DASH_HIT_RADIUS:
+					_predict_combat_hit(target)
+					break
+
+	# ===== 新增代码 START =====
+	# 修改内容：将旧的坐标上报 send_move 升级为输入上报 send_input
+	# 修改原因：服务端权威模式下，客户端只发送输入，坐标/状态由服务端回传
+	# 影响范围：本地玩家每帧战斗网络上行
+	var ws_client = get_node_or_null("/root/BattleWsClient")
+	if ws_client:
+		var mouse_pos: Vector2 = get_global_mouse_position()
+		if is_charging_joystick and attack_dir != Vector2.ZERO:
+			mouse_pos = global_position + (attack_dir * 100.0)
+		var is_attacking_now: bool = (_input_buffer == "attack") or attack_just_pressed
+		ws_client.send_input(
+			input_dir.x,
+			input_dir.y,
+			is_charging_now,
+			is_attacking_now,
+			mouse_pos.x,
+			mouse_pos.y
+		)
+	# ===== 新增代码 END =====
+
+	# 新增大招光环维护
+	if active_buff_timer > 0.0:
+		active_buff_timer -= delta
+		_was_buffed = true
+		if _last_anim_state != 7 and _visuals:
+			_visuals.modulate = Color(1.5, 0.5, 1.5)
+	elif _was_buffed:
+		_was_buffed = false
+		if _last_anim_state != 7 and _visuals:
+			_visuals.modulate = Color(1, 1, 1)
+
+# ==========================================
+# 蓄力突刺执行 (Left Click Release)
+# ==========================================
+func _execute_charge_dash(dash_dir_joystick: Vector2 = Vector2.ZERO) -> void:
+	# 提取有效蓄力时间 (最高 2.5 秒) 计算最终距离
+	var effective_time: float = minf(charge_timer, MAX_EFFECTIVE_CHARGE_TIME)
+	var distance: float = effective_time * (BASE_SPEED * DASH_DIST_MULTIPLIER)
+	charge_timer = 0.0 
+	
+	if distance < 10.0:
+		current_state = State.IDLE
+		return
+		
+	current_state = State.DASHING
+	AudioManager.play_sfx("dash", 0.0)
+	var dash_dir: Vector2
+	if dash_dir_joystick != Vector2.ZERO:
+		dash_dir = dash_dir_joystick.normalized()
+	else:
+		var mouse_pos: Vector2 = get_global_mouse_position()
+		dash_dir = global_position.direction_to(mouse_pos)
+	if dash_dir == Vector2.ZERO:
+		dash_dir = Vector2(1.0 if _visuals.scale.x > 0 else -1.0, 0.0)
+	
+	# 初速度 = 距离 * 摩擦系数
+	var initial_burst_speed: float = distance * DASH_FRICTION
+	velocity += dash_dir * initial_burst_speed
+	
+	if _hitbox_area: _hitbox_area.monitoring = true
+	if _hitbox_polygon: _hitbox_polygon.disabled = false
+	_attack_hit_targets.clear()
+	
+	get_tree().create_timer(DASH_DURATION).timeout.connect(func():
+		if current_state == State.DASHING:
+			if _hitbox_area: _hitbox_area.monitoring = false
+			if _hitbox_polygon: _hitbox_polygon.disabled = true
+
+			if has_speed_buff():
+				current_state = State.IDLE # 预测：完全取消后摇
+			else:
+				current_state = State.POST_CAST
+				get_tree().create_timer(DASH_POST_CAST).timeout.connect(func():
+					if current_state == State.POST_CAST:
+						current_state = State.IDLE
+				)
+	)
+
+# ==========================================
+# 常规挥砍 (attack 动作 / 右键)
+# ==========================================
+func _start_attack() -> void:
+	current_state = State.PRE_CAST
+	get_tree().create_timer(ATTACK_PRE_CAST).timeout.connect(func() -> void:
+		if current_state != State.PRE_CAST: return
+		
+		current_state = State.ATTACK
+		if _hitbox_area: _hitbox_area.monitoring = true
+		if _hitbox_polygon: _hitbox_polygon.disabled = false
+		_attack_hit_targets.clear()
+		
+		get_tree().create_timer(ATTACK_DURATION).timeout.connect(func() -> void:
+			if current_state != State.ATTACK: return
+			if _hitbox_area: _hitbox_area.monitoring = false
+			if _hitbox_polygon: _hitbox_polygon.disabled = true
+
+			if has_speed_buff():
+				current_state = State.IDLE # 预测：完全取消后摇
+			else:
+				current_state = State.POST_CAST
+				get_tree().create_timer(ATTACK_POST_CAST_MISS).timeout.connect(func() -> void:
+					if current_state != State.POST_CAST: return
+					current_state = State.IDLE
+				)
+		)
+	)
+
+func _on_hitbox_body_entered(body: Node2D) -> void:
+	if not (body is CharacterBody2D): return
+	var cb: CharacterBody2D = body as CharacterBody2D
+	if cb == self or cb in _attack_hit_targets: return
+	
+	_attack_hit_targets.append(cb)
+	if is_local_player:
+		_predict_combat_hit(cb)
+	var victim_visuals: Node2D = cb.get_node_or_null("Visuals") as Node2D
+	if victim_visuals:
+		victim_visuals.modulate = Color(1, 0, 0)
+		get_tree().create_timer(0.1).timeout.connect(func() -> void:
+			if is_instance_valid(victim_visuals):
+				victim_visuals.modulate = Color(1, 1, 1)
+		)
+
+func _handle_remote_interpolation(delta: float) -> void:
+	global_position = global_position.lerp(target_pos, 15.0 * delta)
+	if _visuals:
+		_visuals.rotation = 0.0 # 彻底干掉远端旋转同步
+
+# ==========================================
+# 纯代码生成：蓄力指示箭头、UI、碰撞盒
+# ==========================================
+func _build_charge_indicator() -> void:
+	_charge_pivot = Node2D.new()
+	_charge_pivot.name = "ChargePivot"
+	_charge_pivot.hide()
+
+	# 1. 主体线段 (产生圆润、半透明的胶囊光束感)
+	var body_line = Line2D.new()
+	body_line.points = PackedVector2Array([Vector2(20, 0), Vector2(90, 0)])
+	body_line.width = 12.0
+	body_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	body_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+
+	# 添加高级渐变色 (发根淡紫粉透明 -> 头部淡淡的亮白)
+	var grad = Gradient.new()
+	grad.add_point(0.0, Color(0.8, 0.6, 0.9, 0.15))
+	grad.add_point(1.0, Color(1.0, 1.0, 1.0, 0.75))
+	body_line.gradient = grad
+
+	# 2. 箭头头部 (利用圆角折线，打造干净利落的几何感)
+	var head_line = Line2D.new()
+	head_line.points = PackedVector2Array([Vector2(70, -14), Vector2(90, 0), Vector2(70, 14)])
+	head_line.width = 12.0
+	head_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	head_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	head_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	head_line.default_color = Color(1.0, 1.0, 1.0, 0.9)
+
+	# 将两根线组装进 Pivot (枢纽) 中
+	_charge_pivot.add_child(body_line)
+	_charge_pivot.add_child(head_line)
+	add_child(_charge_pivot)
+
+func _make_attack_fan_polygon() -> PackedVector2Array:
+	var pts: PackedVector2Array = PackedVector2Array()
+	pts.append(Vector2.ZERO)
+	var step_deg: float = 10.0
+	var ang_deg: float = -60.0
+	while ang_deg <= 60.0 + 0.001:
+		var rad: float = deg_to_rad(ang_deg)
+		pts.append(Vector2(cos(rad), sin(rad)) * MELEE_RADIUS)
+		ang_deg += step_deg
+	return pts
+
+func _build_hitbox_area() -> void:
+	if _visuals == null: return
+	_hitbox_area = Area2D.new()
+	_hitbox_area.name = "HitboxArea"
+	_hitbox_area.monitoring = false
+	_hitbox_area.monitorable = false
+	_visuals.add_child(_hitbox_area)
+
+	_hitbox_polygon = CollisionPolygon2D.new()
+	_hitbox_polygon.name = "HitboxFan"
+	_hitbox_polygon.disabled = true
+	_hitbox_polygon.polygon = _make_attack_fan_polygon()
+	_hitbox_area.add_child(_hitbox_polygon)
+	_hitbox_area.body_entered.connect(_on_hitbox_body_entered)
+
+func _build_dynamic_ui() -> void:
+	_ui_container = Node2D.new()
+	_ui_container.name = "UI"
+	add_child(_ui_container)
+
+	_name_label = Label.new()
+	_name_label.name = "NameLabel"
+	if is_local_player:
+		var local_name: String = GameManager.username
+		if local_name == "": local_name = "Unknown"
+		_name_label.text = local_name
+		_name_label.modulate = Color(0.2, 0.8, 1.0)
+	else:
+		_name_label.text = "Enemy_" + str(uid)
+		_name_label.modulate = Color(1.0, 0.2, 0.2)
+	_name_label.position = Vector2(-50.0, -120.0)
+	_ui_container.add_child(_name_label)
+
+	_hp_bar = ProgressBar.new()
+	_hp_bar.name = "HPBar"
+	_hp_bar.min_value = 0
+	_hp_bar.max_value = 100
+	_hp_bar.value = hp
+	_hp_bar.show_percentage = false
+	_hp_bar.custom_minimum_size = Vector2(200.0, 10.0)
+	_hp_bar.position = Vector2(-100.0, 130.0)
+
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.15, 0.02, 0.02)
+	bg_style.border_color = Color(0.02, 0.02, 0.02)
+	bg_style.border_width_left = 1
+	bg_style.border_width_right = 1
+	bg_style.border_width_top = 1
+	bg_style.border_width_bottom = 1
+	_hp_bar.add_theme_stylebox_override("background", bg_style)
+
+	var fill_style := StyleBoxFlat.new()
+	fill_style.bg_color = Color(0.2, 1.0, 0.2)
+	_hp_bar.add_theme_stylebox_override("fill", fill_style)
+	_ui_container.add_child(_hp_bar)
+
+func _ensure_ui_not_mirrored() -> void:
+	if _ui_container == null or _visuals == null: return
+	var visuals_sign: float = abs(sign(_visuals.scale.x))
+	if visuals_sign == 0.0: visuals_sign = 1.0
+	_ui_container.scale.x = visuals_sign
+
+func _predict_combat_hit(victim: CharacterBody2D) -> void:
+	# 锁定本地状态 0.35 秒，等待服务器快照追上我们的进度
+	prediction_lock_timer = 0.35
+	# 【核心新增】：同时给受害者上锁，避免旧快照打断受击动画
+	victim.prediction_lock_timer = 0.35
+
+	# 强制清理本地攻击与蓄力状态
+	charge_timer = 0.0
+	_input_buffer = ""
+	if _charge_pivot != null: _charge_pivot.hide()
+	if _hitbox_area != null: _hitbox_area.monitoring = false
+	if _hitbox_polygon != null: _hitbox_polygon.disabled = true
+
+	# 确定我方（攻击者）的击退施加方向
+	var push_dir: Vector2
+	if current_state == State.DASHING:
+		push_dir = velocity.normalized()
+	else:
+		# 【核心修复】：恢复本地预测时的 360 度鼠标击退方向
+		var mouse_pos: Vector2 = get_global_mouse_position()
+		push_dir = global_position.direction_to(mouse_pos)
+		if push_dir == Vector2.ZERO:
+			push_dir = Vector2(1.0 if _visuals.scale.x > 0 else -1.0, 0.0)
+
+	# 矩阵 A：绝对拼刀 (对方也在冲刺)
+	if victim.current_state == State.DASHING:
+		_trigger_hit_feedback(true) # <--- 新增这行：触发拼刀极强反馈
+		current_state = State.HIT_STUN
+		velocity = push_dir * -KNOCKBACK_SPEED
+		# 预测受害者的弹开 (往他自己原本冲刺的反方向)
+		victim.current_state = State.HIT_STUN
+		victim.velocity = victim.velocity.normalized() * -KNOCKBACK_SPEED
+
+	# 矩阵 B：单方碾压
+	else:
+		_trigger_hit_feedback(false) # <--- 新增这行：触发普攻反馈
+		current_state = State.POST_CAST
+		velocity = Vector2.ZERO
+		victim.current_state = State.HIT_STUN
+		victim.velocity = push_dir * KNOCKBACK_SPEED
+
+func update_network_state(px: float, pz: float, rot_y: float, server_state: int, server_hp: int, server_energy: int) -> void:
+	# 无论是本地还是远端，只要血量能量变化，就带上 is_local 标识发给前端
+	if hp != server_hp or energy != server_energy:
+		var payload := {
+			"is_local": is_local_player,
+			"hp": server_hp,
+			"energy": server_energy
+		}
+		var gm = get_node_or_null("/root/GameManager")
+		if gm and gm.has_method("notify_react"):
+			gm.notify_react("player_status", JSON.stringify(payload))
+
+	hp = server_hp
+	energy = server_energy
+	if _hp_bar != null:
+		_hp_bar.value = hp
+
+	if is_local_player:
+		# 【核心】如果处于预测锁定期，拒绝接受服务器的历史状态与坐标，相信本地物理！
+		if prediction_lock_timer > 0.0:
+			return
+
+		var server_pos := Vector2(px, pz)
+		var dist := global_position.distance_to(server_pos)
+
+		# 1. 绝对权威覆写：不可控状态（硬直/被击退/死亡），必须瞬间服从服务端位置和状态！
+		if server_state == State.HIT_STUN or server_state == State.DEAD:
+			# <--- 新增这行：如果是刚刚进入受击状态，抖一下屏幕
+			if current_state != server_state and server_state == State.HIT_STUN:
+				_trigger_hit_feedback(false)
+
+			current_state = server_state
+			global_position = server_pos # 【核心】强行拉回到服务器计算的被击退位置
+			charge_timer = 0.0
+			_input_buffer = ""
+			if _charge_pivot != null: _charge_pivot.hide()
+			if _hitbox_area != null: _hitbox_area.monitoring = false
+			if _hitbox_polygon != null: _hitbox_polygon.disabled = true
+
+		# 2. 【核心修复】状态解锁：如果本地还在硬直、后摇或施法中，但服务器说你已经自由了，立即解除锁定！
+		elif current_state == State.HIT_STUN or current_state == State.POST_CAST or current_state == State.SKILL_CAST:
+			if server_state == State.IDLE or server_state == State.MOVE or server_state == State.CHARGING:
+				current_state = server_state
+
+		# 3. 轻量权威校正（防漂移）
+		else:
+			if dist > 200.0:
+				# 误差大得离谱（比如客户端卡顿了一下，或者穿墙作弊），瞬间硬拉回
+				global_position = server_pos
+
+	else:
+		# 【核心新增】：远端若处于预测锁定期，拒绝旧快照覆盖
+		if prediction_lock_timer > 0.0:
+			return
+		# 远端玩家完全使用服务端权威状态推进动画与表现
+		current_state = server_state
+		target_pos = Vector2(px, pz)
+		target_rot = deg_to_rad(rot_y)
+
+func has_speed_buff() -> bool:
+	return active_buff_timer > 0.0
+
+# ==========================================
+# 极速者视觉与动画系统 (已合并入 Player)
+# ==========================================
+func _setup_integrated_visuals() -> void:
+	if not _visuals: return
+
+	_head = _visuals.get_node_or_null("Head")
+	_body = _visuals.get_node_or_null("Body")
+	_weapon = _visuals.get_node_or_null("Weapon")
+	_base_visuals_scale_x = sign(_visuals.scale.x)
+	if _base_visuals_scale_x == 0.0: _base_visuals_scale_x = 1.0
+
+	# 记录所有部件的基础 Transform，完美兼容镜像和编辑器偏移
+	if _head: _base_head_pos_y = _head.position.y
+	if _body: _base_body_scale = _body.scale
+	if _weapon:
+		_base_weapon_pos_y = _weapon.position.y
+		_base_weapon_rot = _weapon.rotation_degrees
+
+	# 特效优化：更细、水墨质感的拖尾
+	_trail = CPUParticles2D.new()
+	_trail.name = "InkTrail"
+	_trail.amount = 30
+	_trail.lifetime = 0.35
+	_trail.gravity = Vector2.ZERO
+	_trail.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	_trail.emission_sphere_radius = 5.0
+	_trail.direction = Vector2(-1, 0)
+	_trail.spread = 3.0
+	_trail.initial_velocity_min = 40.0
+	_trail.initial_velocity_max = 70.0
+	_trail.local_coords = false
+
+	var grad = Gradient.new()
+	grad.add_point(0.0, Color(0.1, 0.1, 0.1, 0.8))
+	grad.add_point(0.4, Color(0.4, 0.4, 0.4, 0.5))
+	grad.add_point(1.0, Color(1.0, 1.0, 1.0, 0.0))
+	_trail.color_ramp = grad
+
+	var curve = Curve.new()
+	curve.add_point(Vector2(0, 1.0))
+	curve.add_point(Vector2(1, 0.0))
+	_trail.scale_amount_curve = curve
+	_trail.scale_amount_min = 1.0
+	_trail.scale_amount_max = 3.5
+
+	_visuals.add_child(_trail)
+	_trail.emitting = false
+
+func _update_role_animation(new_state: int) -> void:
+	if new_state == _last_anim_state: return
+	_last_anim_state = new_state
+
+	if not _body or not _visuals: return
+	if _role_tween: _role_tween.kill()
+
+	match new_state:
+		0, 6: # IDLE, POST_CAST (速度放慢 2 倍，头身极度和谐)
+			if _trail: _trail.emitting = false
+			_role_tween = create_tween().set_loops().set_parallel(true)
+			_role_tween.tween_property(_body, "scale:y", _base_body_scale.y * 0.97, 0.8).set_ease(Tween.EASE_IN_OUT)
+			_role_tween.tween_property(_body, "scale:y", _base_body_scale.y, 0.8).set_delay(0.8)
+
+			if _head:
+				_role_tween.tween_property(_head, "position:y", _base_head_pos_y + 1.5, 0.8).set_ease(Tween.EASE_IN_OUT)
+				_role_tween.tween_property(_head, "position:y", _base_head_pos_y, 0.8).set_delay(0.8)
+			if _weapon:
+				_role_tween.tween_property(_weapon, "rotation_degrees", _base_weapon_rot, 0.8)
+
+		1: # MOVE (普通移动)
+			if _trail: _trail.emitting = true
+			_role_tween = create_tween().set_loops().set_parallel(true)
+			_role_tween.tween_property(_body, "scale:y", _base_body_scale.y * 1.03, 0.25)
+			_role_tween.tween_property(_body, "scale:x", _base_body_scale.x * 0.97, 0.25)
+			if _head:
+				_role_tween.tween_property(_head, "position:y", _base_head_pos_y - 2.0, 0.25)
+
+			_role_tween.tween_property(_body, "scale:y", _base_body_scale.y, 0.25).set_delay(0.25)
+			_role_tween.tween_property(_body, "scale:x", _base_body_scale.x, 0.25).set_delay(0.25)
+			if _head:
+				_role_tween.tween_property(_head, "position:y", _base_head_pos_y, 0.25).set_delay(0.25)
+			if _weapon:
+				_role_tween.tween_property(_weapon, "rotation_degrees", _base_weapon_rot + 15.0, 0.25)
+
+		2: # CHARGING (蓄力状态：缓慢平举武器)
+			if _trail: _trail.emitting = true
+			_role_tween = create_tween().set_parallel(true)
+			_role_tween.tween_property(_body, "scale:y", _base_body_scale.y * 0.95, 0.6).set_ease(Tween.EASE_OUT)
+			_role_tween.tween_property(_body, "scale:x", _base_body_scale.x * 1.02, 0.6)
+			if _head:
+				_role_tween.tween_property(_head, "position:y", _base_head_pos_y + 2.0, 0.6)
+			if _weapon:
+				_role_tween.tween_property(_weapon, "rotation_degrees", _base_weapon_rot + WEAPON_CHARGE_ROT, 1.5).set_ease(Tween.EASE_OUT)
+		3: # DASHING
+			if _trail: _trail.emitting = true
+		7: # HIT_STUN (受击)
+			if _trail: _trail.emitting = false
+			_role_tween = create_tween().set_parallel(true)
+			_visuals.modulate = Color(3.0, 0.2, 0.2)
+			_role_tween.tween_property(_body, "scale", _base_body_scale * 0.8, 0.1)
+			_role_tween.tween_property(_body, "scale", _base_body_scale, 0.3).set_delay(0.1)
+
+			get_tree().create_timer(0.2).timeout.connect(func():
+				if _last_anim_state == 7 and _visuals:
+					_visuals.modulate = Color(1.5, 0.5, 1.5) if active_buff_timer > 0 else Color(1, 1, 1)
+			)
+
+# ==========================================
+# 打击感反馈：卡肉顿帧 (Hit-Stop) & 屏幕震动
+# ==========================================
+func _trigger_hit_feedback(is_clash: bool) -> void:
+	# 1. 触发屏幕震动
+	var cam = get_viewport().get_camera_2d()
+	if cam and cam.has_method("apply_shake"):
+		cam.apply_shake(SHAKE_INTENSITY_CLASH if is_clash else SHAKE_INTENSITY_NORMAL)
+
+	# 【新增音效】：根据是否拼刀播放不同的随机声音
+	if is_clash:
+		AudioManager.play_sfx("clash", 2.0)
+	else:
+		AudioManager.play_sfx("hit_flesh", 0.0)
+
+	# 2. 触发卡肉顿帧 (若已处于绝杀特写 0.2 倍速，则不覆盖)
+	if Engine.time_scale == 0.2: return
+
+	Engine.time_scale = HIT_STOP_TIMESCALE
+	var stop_duration: float = HIT_STOP_DURATION_CLASH if is_clash else HIT_STOP_DURATION_NORMAL
+
+	# 创建真实世界时间的定时器
+	get_tree().create_timer(stop_duration, true, false, true).timeout.connect(func():
+		if Engine.time_scale == HIT_STOP_TIMESCALE:
+			Engine.time_scale = 1.0
+	)
+
+--- FILE: \scripts\AudioManager.gd ---
+
+extends Node
+
+# 配置音效池 (支持同一种声音有多个变体)
+var audio_pools: Dictionary = {
+	"dash": [
+		"res://assets/music/game/dash_1.wav",
+		"res://assets/music/game/dash_2.wav"
+	],
+	"hit_flesh": [
+		"res://assets/music/game/hit_1.wav",
+		"res://assets/music/game/hit_2.wav",
+		"res://assets/music/game/hit_3.wav"
+	],
+	"clash": [
+		"res://assets/music/game/clash_1.wav"
+	],
+	"ultimate": [
+		"res://assets/music/game/ultimate_1.wav"
+	]
+	# 如果以后有了挥空声，可以继续往这加: "swing": ["res://.../swing_1.wav"]
+}
+
+var _streams: Dictionary = {}
+
+func _ready() -> void:
+	# 启动时安全预加载所有音频变体
+	for key in audio_pools:
+		_streams[key] = []
+		for path in audio_pools[key]:
+			if ResourceLoader.exists(path):
+				_streams[key].append(ResourceLoader.load(path))
+			else:
+				print("[AudioManager] 警告：找不到音效文件 -> ", path)
+
+# 核心播放函数
+func play_sfx(sound_name: String, volume_db: float = 0.0, randomize_pitch: bool = true) -> void:
+	if not _streams.has(sound_name) or _streams[sound_name].is_empty():
+		return
+
+	# 【核心技巧】：在加载好的变体池中，随机抽取一个！
+	var stream_array: Array = _streams[sound_name]
+	var selected_stream = stream_array.pick_random()
+
+	var player = AudioStreamPlayer.new()
+	player.stream = selected_stream
+	player.volume_db = volume_db
+	player.bus = "Master"
+
+	# 【听觉技巧】：微微随机改变音调，绝不单调
+	if randomize_pitch:
+		player.pitch_scale = randf_range(0.9, 1.1)
+
+	add_child(player)
+	player.play()
+	player.finished.connect(player.queue_free)
+
+--- FILE: \scripts\BattleWsClient.gd ---
+
+extends Node
+
+# ===== 新增代码 START =====
+# 修改内容：对外广播解码后的 GameMessage 字典
+# 修改原因：场景层订阅网络状态并驱动实体
+# 影响范围：仅信号定义与解码后派发
+signal network_message(msg: Dictionary)
+# ===== 新增代码 END =====
+
+# ===== 新增代码 START =====
+# 修改内容：WebSocket 基础客户端（建连 + 轮询 + 收包长度打印）
+# 修改原因：里程碑 1 只打通网关通信基础，不做业务反序列化
+# 影响范围：仅本单例脚本
+var peer: WebSocketPeer = WebSocketPeer.new()
+var _last_state: int = WebSocketPeer.STATE_CLOSED
+# ===== 新增代码 END =====
+
+func _resolve_ws_base(raw_ws_base: String) -> String:
+	# 优先使用前端注入（Web 线上/联调主路径）
+	var from_frontend := raw_ws_base.strip_edges()
+	if not from_frontend.is_empty():
+		return from_frontend
+
+	# Web 导出兜底：基于当前页面域名自动拼接 ws/wss
+	if OS.has_feature("web"):
+		var protocol := "ws://"
+		var host := ""
+		var is_https = JavaScriptBridge.eval("window.location.protocol === 'https:'")
+		if bool(is_https):
+			protocol = "wss://"
+		host = str(JavaScriptBridge.eval("window.location.host"))
+		if not host.is_empty():
+			return protocol + host + "/ws"
+
+	# 本地 Godot 编辑器运行兜底
+	return "ws://127.0.0.1:8081/ws"
+
+func connect_to_server() -> void:
+	# ===== 新增代码 START =====
+	# 修改内容：从 GameManager 读取参数并拼接网关 URL
+	# 修改原因：统一使用前端注入参数建立 battle scope 连接
+	# 影响范围：仅连接发起流程
+	if not has_node("/root/GameManager"):
+		push_error("[BattleWsClient] 未找到 /root/GameManager")
+		return
+
+	var gm := get_node("/root/GameManager")
+	var token: String = str(gm.token)
+	var room_id: String = str(gm.room_id)
+	var ws_base: String = _resolve_ws_base(str(gm.ws_base))
+
+	var separator := "?"
+	if ws_base.find("?") != -1:
+		separator = "&"
+
+	var url: String = ws_base + separator + "token=" + token.uri_encode() + "&scope=battle&roomId=" + room_id.uri_encode()
+
+	var err := peer.connect_to_url(url)
+	if err != OK:
+		push_error("[BattleWsClient] connect_to_url 失败，err=%d" % err)
+		return
+
+	_last_state = WebSocketPeer.STATE_CONNECTING
+	print("[BattleWsClient] 正在连接: ", url)
+	# ===== 新增代码 END =====
+
+func _process(_delta: float) -> void:
+	# ===== 新增代码 START =====
+	# 修改内容：轮询连接状态与读取二进制包
+	# 修改原因：Godot WebSocketPeer 需要手动 poll 才能推进状态与收包
+	# 影响范围：仅网络基础层；不做任何业务解码
+	peer.poll()
+	var state := peer.get_ready_state()
+
+	if state == WebSocketPeer.STATE_OPEN and _last_state != WebSocketPeer.STATE_OPEN:
+		print("[BattleWsClient] WebSocket 已连接")
+
+	_last_state = state
+
+	while peer.get_available_packet_count() > 0:
+		var packet: PackedByteArray = peer.get_packet()
+		var msg_dict: Dictionary = {}
+
+		# 兼容 JSON 侧信道与 Protobuf 双轨解析
+		var text := packet.get_string_from_utf8()
+		if text.begins_with("{"):
+			var parsed = JSON.parse_string(text)
+			if typeof(parsed) == TYPE_DICTIONARY:
+				msg_dict = parsed
+		else:
+			msg_dict = ProtoParser.decode_game_message(packet)
+
+		if not msg_dict.is_empty():
+			# print("[BattleWsClient] 解码成功: ", msg_dict)
+			network_message.emit(msg_dict)
+	# ===== 新增代码 END =====
+
+
+# ===== 新增代码 START =====
+# 修改内容：删除旧的 send_move，改为输入指令上行 send_input
+# 修改原因：客户端改为仅发送输入，位置与状态由服务端权威推进并回传
+# 影响范围：battle 输入同步上行链路
+func send_input(input_x: float, input_y: float, is_charging: bool, is_attacking: bool, mouse_x: float, mouse_y: float) -> void:
+	# 连接未建立时直接忽略，避免无意义报错
+	if peer.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return
+	# 必须存在 GameManager 才能拿到 user_id 与 room_id
+	if not has_node("/root/GameManager"):
+		return
+
+	var gm := get_node("/root/GameManager")
+	var bytes: PackedByteArray = ProtoParser.encode_input_message(
+		int(gm.user_id),
+		str(gm.room_id),
+		input_x,
+		input_y,
+		is_charging,
+		is_attacking,
+		mouse_x,
+		mouse_y
+	)
+	peer.put_packet(bytes)
+# ===== 新增代码 END =====
+
+
+func send_ultimate() -> void:
+	if peer.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return
+	# 使用轻量级 JSON 消息触发大招，绕过繁琐的 Protobuf 重编译
+	var json_str := '{"type":"cast_ultimate"}'
+	peer.put_packet(json_str.to_utf8_buffer())
+
+--- FILE: \scripts\GameManager.gd ---
+
+extends Node
+
+# ===== 新增代码 START =====
+# 修改内容：战场入口全局参数（由 React 注入）
+# 修改原因：迁移到 Godot 后，需要保留与 Unity EnterBattlePayload 对齐的数据结构
+# 影响范围：仅本单例脚本的数据缓存与跨端桥接
+var token: String = ""
+var user_id: int = 0
+var username: String = ""
+var room_id: String = ""
+var ws_base: String = ""
+var selected_class: String = ""
+var is_mobile: bool = false
+var is_fight_started: bool = false
+
+var _enter_battle_callback: JavaScriptObject = null
+var _start_fight_callback: JavaScriptObject = null
+# ===== 新增代码 END =====
+
+func _ready() -> void:
+	# ===== 新增代码 START =====
+	# 修改内容：注册 window.enterBattle 回调给前端调用
+	# 修改原因：React 侧通过 JSBridge 注入 battle 初始化参数
+	# 影响范围：仅 Web 平台的 JS 交互入口
+	if OS.has_feature("web"):
+		var window: JavaScriptObject = JavaScriptBridge.get_interface("window")
+		if window != null:
+			_enter_battle_callback = JavaScriptBridge.create_callback(_on_enter_battle_from_react)
+			window.enterBattle = _enter_battle_callback
+			_start_fight_callback = JavaScriptBridge.create_callback(func(_args: Array):
+				is_fight_started = true
+				print("[GameManager] 收到前端 FIGHT 指令，战斗开始！")
+			)
+			window.startFight = _start_fight_callback
+			var _mobile_mode_cb: JavaScriptObject = JavaScriptBridge.create_callback(_on_set_mobile_mode_from_js)
+			window.setMobileMode = _mobile_mode_cb
+			print("[GameManager] window.enterBattle 已注册")
+		else:
+			push_warning("[GameManager] 无法获取 window 接口，enterBattle 未注册")
+	else:
+		push_warning("[GameManager] 当前非 Web 平台，跳过 JavaScriptBridge 注册")
+	# ===== 新增代码 END =====
+
+func _on_set_mobile_mode_from_js(args: Array) -> void:
+	var v: bool = false
+	if args.size() > 0:
+		v = bool(args[0])
+	is_mobile = v
+	call_deferred("_apply_mobile_mode_to_local_player")
+
+func _apply_mobile_mode_to_local_player() -> void:
+	for p in get_tree().get_nodes_in_group("players"):
+		if p.get("is_local_player") == true and p.has_method("set_mobile_mode"):
+			p.set_mobile_mode(is_mobile)
+
+func _on_enter_battle_from_react(args: Array) -> void:
+	# ===== 新增代码 START =====
+	# 修改内容：解析前端传入 JSON，并触发 BattleWsClient 建连
+	# 修改原因：完成跨端通信桥接最小闭环
+	# 影响范围：仅参数注入与连接触发，不含任何实体/协议业务
+	if args.is_empty():
+		push_error("[GameManager] enterBattle 参数为空")
+		return
+
+	var payload_json := str(args[0])
+	var parsed: Variant = JSON.parse_string(payload_json)
+
+	if typeof(parsed) != TYPE_DICTIONARY:
+		push_error("[GameManager] enterBattle JSON 解析失败")
+		return
+
+	var data: Dictionary = parsed
+	token = str(data.get("token", ""))
+	user_id = int(data.get("userId", 0))
+	# ===== 新增代码 START =====
+	username = str(data.get("username", "Unknown"))
+	# ===== 新增代码 END =====
+	room_id = str(data.get("roomId", ""))
+	ws_base = str(data.get("wsBase", ""))
+	selected_class = str(data.get("selectedClass", ""))
+	is_mobile = bool(data.get("isMobile", false))
+	is_fight_started = false
+
+	print("[GameManager] enterBattle 注入完成 user_id=", user_id, " room_id=", room_id, " is_mobile=", is_mobile)
+
+	if has_node("/root/BattleWsClient"):
+		var ws_client := get_node("/root/BattleWsClient")
+		ws_client.connect_to_server()
+	else:
+		push_error("[GameManager] 未找到 /root/BattleWsClient，无法连接 WebSocket")
+	call_deferred("_apply_mobile_mode_to_local_player")
+	# ===== 新增代码 END =====
+
+func notify_react(result_type: String, payload_json: String = "{}") -> void:
+	# ===== 新增代码 START =====
+	# 修改内容：向前端抛出 unity:battle_result 事件
+	# 修改原因：保持与原 WebGL jslib 通知语义一致
+	# 影响范围：仅 JS 事件派发，不涉及游戏对象逻辑
+	if not OS.has_feature("web"):
+		push_warning("[GameManager] 非 Web 平台，notify_react 跳过")
+		return
+
+	var safe_result_type := JSON.stringify(result_type)
+	var safe_payload := payload_json
+	var js_code := (
+		"(function(){"
+		+ "try{"
+		+ "var payload=" + safe_payload + ";"
+		+ "window.parent.dispatchEvent(new CustomEvent('unity:battle_result',{detail:{resultType:" + safe_result_type + ",payload:payload}}));"
+		+ "}catch(e){console.error('[GameManager] notify_react error',e);}"
+		+ "})();"
+	)
+
+	JavaScriptBridge.eval(js_code)
+	# ===== 新增代码 END =====
+
+--- FILE: \scripts\ProtoParser.gd ---
+
+extends RefCounted
+class_name ProtoParser
+
+# ===== 新增代码 START =====
+# 修改内容：新增轻量级 Proto3 GameMessage 解码器（无第三方插件）
+# 修改原因：客户端仅需解析特定字段并兼容未知字段跳过
+# 影响范围：仅本解析脚本；供 BattleWsClient 收包后调用
+static func decode_game_message(bytes: PackedByteArray) -> Dictionary:
+	var buffer := StreamPeerBuffer.new()
+	buffer.data_array = bytes
+	buffer.seek(0)
+
+	var result: Dictionary = {}
+
+	while buffer.get_position() < buffer.get_size():
+		var tag: int = _read_varint(buffer)
+		var field_number: int = tag >> 3
+		var wire_type: int = tag & 7
+
+		match field_number:
+			1:
+				if wire_type == 2:
+					var type_len: int = _read_varint(buffer)
+					result["type"] = buffer.get_utf8_string(type_len)
+				else:
+					_skip_field(buffer, wire_type)
+			2:
+				if wire_type == 0:
+					result["user_id"] = _read_varint(buffer)
+				else:
+					_skip_field(buffer, wire_type)
+			3:
+				if wire_type == 2:
+					var content_len: int = _read_varint(buffer)
+					result["content"] = buffer.get_utf8_string(content_len)
+				else:
+					_skip_field(buffer, wire_type)
+			4:
+				if wire_type == 5:
+					result["x"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			5:
+				if wire_type == 5:
+					result["y"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			6:
+				if wire_type == 5:
+					result["z"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			7:
+				# 修改内容：补全 repeated PlayerPos 的长度前缀块解析
+				# 修改原因：服务端 state 下行会把多个玩家快照塞到 players 字段中
+				# 影响范围：战斗状态同步消息解析路径
+				if wire_type == 2:
+					var player_len: int = _read_varint(buffer)
+					var end_pos: int = min(buffer.get_size(), buffer.get_position() + player_len)
+					var player_dict: Dictionary = _decode_player_pos(buffer, end_pos)
+					if not result.has("players"):
+						result["players"] = []
+					result["players"].append(player_dict)
+				else:
+					_skip_field(buffer, wire_type)
+			9:
+				if wire_type == 2:
+					var room_id_len: int = _read_varint(buffer)
+					result["room_id"] = buffer.get_utf8_string(room_id_len)
+				else:
+					_skip_field(buffer, wire_type)
+			10:
+				if wire_type == 5:
+					result["rot_y"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			11:
+				if wire_type == 5:
+					result["input_x"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			12:
+				if wire_type == 5:
+					result["input_y"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			13:
+				if wire_type == 0:
+					# bool 在 Proto3 中使用 varint 编码：0=false, 非0=true
+					result["is_charging"] = _read_varint(buffer) != 0
+				else:
+					_skip_field(buffer, wire_type)
+			14:
+				if wire_type == 0:
+					# bool 在 Proto3 中使用 varint 编码：0=false, 非0=true
+					result["is_attacking"] = _read_varint(buffer) != 0
+				else:
+					_skip_field(buffer, wire_type)
+			15:
+				if wire_type == 5:
+					result["mouse_x"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			16:
+				if wire_type == 5:
+					result["mouse_y"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			_:
+				_skip_field(buffer, wire_type)
+
+	return result
+
+
+static func _decode_player_pos(buffer: StreamPeerBuffer, end_pos: int) -> Dictionary:
+	# 修改内容：新增 PlayerPos 子消息解析器
+	# 修改原因：players 为 length-delimited 嵌套消息，需要在子块内递归解析字段
+	# 影响范围：BattleWsClient 收到 state 广播后的玩家快照落地
+	var player: Dictionary = {}
+
+	while buffer.get_position() < end_pos and buffer.get_position() < buffer.get_size():
+		var tag: int = _read_varint(buffer)
+		var field_number: int = tag >> 3
+		var wire_type: int = tag & 7
+
+		match field_number:
+			1:
+				if wire_type == 0:
+					player["user_id"] = _read_varint(buffer)
+				else:
+					_skip_field(buffer, wire_type)
+			2:
+				if wire_type == 5:
+					player["x"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			3:
+				if wire_type == 5:
+					player["y"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			4:
+				if wire_type == 5:
+					player["z"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			5:
+				if wire_type == 5:
+					player["rot_y"] = buffer.get_float()
+				else:
+					_skip_field(buffer, wire_type)
+			6:
+				if wire_type == 0:
+					player["current_state"] = _read_varint(buffer)
+				else:
+					_skip_field(buffer, wire_type)
+			7:
+				if wire_type == 0:
+					player["hp"] = _read_varint(buffer)
+				else:
+					_skip_field(buffer, wire_type)
+			8:
+				if wire_type == 0:
+					player["energy"] = _read_varint(buffer)
+				else:
+					_skip_field(buffer, wire_type)
+			_:
+				_skip_field(buffer, wire_type)
+
+	# 防御性回拨到子消息结束位置，确保上层循环继续读取后续字段
+	buffer.seek(end_pos)
+	return player
+
+
+static func _read_varint(buffer: StreamPeerBuffer) -> int:
+	var value: int = 0
+	var shift: int = 0
+
+	while true:
+		if buffer.get_position() >= buffer.get_size():
+			return value
+
+		var b: int = buffer.get_u8()
+		value |= (b & 0x7F) << shift
+
+		if (b & 0x80) == 0:
+			break
+
+		shift += 7
+		if shift >= 64:
+			break
+
+	return value
+
+
+static func _skip_field(buffer: StreamPeerBuffer, wire_type: int) -> void:
+	match wire_type:
+		0:
+			_read_varint(buffer)
+		1:
+			buffer.seek(min(buffer.get_size(), buffer.get_position() + 8))
+		2:
+			var length: int = _read_varint(buffer)
+			buffer.seek(min(buffer.get_size(), buffer.get_position() + length))
+		5:
+			buffer.seek(min(buffer.get_size(), buffer.get_position() + 4))
+		_:
+			# 未支持/非法 wire type，直接跳到末尾防止死循环
+			buffer.seek(buffer.get_size())
+
+
+static func encode_move_message(user_id: int, room_id: String, x: float, z: float, rot_y: float) -> PackedByteArray:
+	var buffer := StreamPeerBuffer.new()
+
+	_write_string_field(buffer, 1, "move")
+	_write_varint_field(buffer, 2, user_id)
+	_write_float_field(buffer, 4, x)
+	_write_float_field(buffer, 5, 0.0)
+	_write_float_field(buffer, 6, z)
+	_write_string_field(buffer, 9, room_id)
+	_write_float_field(buffer, 10, rot_y)
+
+	return buffer.data_array
+
+
+static func encode_input_message(user_id: int, room_id: String, input_x: float, input_y: float, is_charging: bool, is_attacking: bool, mouse_x: float, mouse_y: float) -> PackedByteArray:
+	# 修改内容：新增输入同步消息编码方法（强类型字段按 Proto3 wire type 写入）
+	# 修改原因：服务端权威模式下，客户端仅上行输入，服务端统一推进并广播状态
+	# 影响范围：BattleWsClient 发送输入消息路径
+	# 编码约定：
+	# - varint(wire=0): user_id, bool 字段
+	# - length-delimited(wire=2): type, room_id
+	# - 32-bit(wire=5): input_x/input_y/mouse_x/mouse_y
+	var buffer := StreamPeerBuffer.new()
+
+	_write_string_field(buffer, 1, "input")
+	_write_varint_field(buffer, 2, user_id)
+	_write_string_field(buffer, 9, room_id)
+	_write_float_field(buffer, 11, input_x)
+	_write_float_field(buffer, 12, input_y)
+	_write_varint_field(buffer, 13, int(is_charging))
+	_write_varint_field(buffer, 14, int(is_attacking))
+	_write_float_field(buffer, 15, mouse_x)
+	_write_float_field(buffer, 16, mouse_y)
+
+	return buffer.data_array
+
+
+static func _write_varint(buffer: StreamPeerBuffer, value: int) -> void:
+	var n: int = value
+	if n < 0:
+		n = 0
+	while true:
+		var byte_value: int = n & 0x7F
+		n >>= 7
+		if n != 0:
+			buffer.put_u8(byte_value | 0x80)
+		else:
+			buffer.put_u8(byte_value)
+			break
+
+
+static func _write_varint_field(buffer: StreamPeerBuffer, field_number: int, value: int) -> void:
+	var tag: int = (field_number << 3) | 0
+	_write_varint(buffer, tag)
+	_write_varint(buffer, value)
+
+
+static func _write_string_field(buffer: StreamPeerBuffer, field_number: int, value: String) -> void:
+	var tag: int = (field_number << 3) | 2
+	var text_bytes: PackedByteArray = value.to_utf8_buffer()
+	_write_varint(buffer, tag)
+	_write_varint(buffer, text_bytes.size())
+	buffer.put_data(text_bytes)
+
+
+static func _write_float_field(buffer: StreamPeerBuffer, field_number: int, value: float) -> void:
+	var tag: int = (field_number << 3) | 5
+	_write_varint(buffer, tag)
+	buffer.put_float(value)
+# ===== 新增代码 END =====
+
+--- FILE: \export_presets.cfg ---
+
+[preset.0]
+
+name="Web"
+platform="Web"
+runnable=true
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter=""
+exclude_filter=""
+export_path="../asternova-web-client/public/godot/GoDot_game.html"
+patches=PackedStringArray()
+patch_delta_encoding=false
+patch_delta_compression_level_zstd=19
+patch_delta_min_reduction=0.1
+patch_delta_include_filters="*"
+patch_delta_exclude_filters=""
+encryption_include_filters=""
+encryption_exclude_filters=""
+seed=0
+encrypt_pck=false
+encrypt_directory=false
+script_export_mode=2
+
+[preset.0.options]
+
+custom_template/debug=""
+custom_template/release=""
+variant/extensions_support=false
+variant/thread_support=false
+vram_texture_compression/for_desktop=true
+vram_texture_compression/for_mobile=true
+html/export_icon=true
+html/custom_html_shell=""
+html/head_include=""
+html/canvas_resize_policy=2
+html/focus_canvas_on_start=true
+html/experimental_virtual_keyboard=true
+progressive_web_app/enabled=false
+progressive_web_app/ensure_cross_origin_isolation_headers=false
+progressive_web_app/offline_page=""
+progressive_web_app/display=1
+progressive_web_app/orientation=0
+progressive_web_app/icon_144x144=""
+progressive_web_app/icon_180x180=""
+progressive_web_app/icon_512x512=""
+progressive_web_app/background_color=Color(0, 0, 0, 1)
+threads/emscripten_pool_size=8
+threads/godot_pool_size=4

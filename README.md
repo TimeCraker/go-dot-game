@@ -1,246 +1,113 @@
-# 🌌 AsterNova Engine Demo ⚔️
+-----
 
-### *A High-Performance 2D Combat Engine Container*
+# 🌌 AsterNova Game Client (Godot Engine)
 
-## 🧠 What Is This?
+   
 
-**AsterNova Engine Demo** 并不是一个普通游戏客户端。
+> **"Feel the impact, not the latency."** — 极致的 Web 端高频动作渲染引擎。
 
-它是一个：
+**AsterNova Game Client** 是整个游戏系统的核心表现层。本项目基于 Godot 4 构建，并专为 WebAssembly (WASM) 运行环境量身定制。在严格的**服务端权威 (Server-Authoritative)** 架构下，本客户端完全剥离了核心物理裁决权，专注于“高频输入采集”、“网络快照平滑插值 (Lerp)”以及“硬核打击感 (Game Feel) 的视觉还原”。
 
-> 🚀 **“嵌入在 Web 中的实时战斗引擎容器”**
+## 🗺️ 引擎运行时架构 (Engine Runtime Architecture)
 
----
-
-### 🧩 核心定位
-
-* 🎮 游戏逻辑：由服务器完全控制
-* ⚡ 客户端：只负责表现 + 预测
-* 🌐 运行环境：嵌入 React Web App
-* 🔗 通信：WebSocket + Protobuf
-
----
-
-### 💡 一句话总结
-
-> **这是一个“可插入网页的轻量级战斗引擎”。**
-
----
-
-## 🏗️ System Architecture
+Godot 客户端作为一个黑盒沙箱，内部运行着严格的同步与渲染循环，并通过双向 JSBridge 与外层 React 容器进行状态握手：
 
 ```mermaid
-flowchart LR
-    A[React Web App] -->|JWT / RoomID| B[Godot Client]
-    B -->|Input Events| C[Go Gateway]
-    C -->|State Sync 60Hz| B
-    C --> D[Game Logic Service]
+flowchart TD
+    %% 样式定义
+    classDef react fill:#f8fafc,stroke:#0284c7,stroke-width:2px,color:#0f172a,rx:4
+    classDef core fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#0f172a,rx:4
+    classDef render fill:#fffbeb,stroke:#d97706,stroke-width:2px,color:#0f172a,rx:4
+    classDef network fill:#fdf4ff,stroke:#c026d3,stroke-width:2px,color:#0f172a,rx:4
 
-    B -->|UI Events| A
+    subgraph Browser_Host ["🌐 React Host Environment"]
+        JSBridge["JSBridge (window.enterBattle)"]:::react
+    end
+
+    subgraph Godot_Engine ["⚙️ Godot WASM Runtime"]
+        direction TB
+        
+        GameManager["GameManager\n[全局跨端总线]"]:::core
+        WSClient["BattleWsClient\n[60Hz 收发与重连]"]:::network
+        Proto["ProtoParser\n[纯 GDScript Protobuf 解析]"]:::network
+        
+        subgraph Scene_Tree ["🌳 Main Scene Tree"]
+            Main["Main (快照分发处理器)"]:::core
+            Camera["GroupCamera\n[震动与多目标跟随]"]:::render
+            Player["Player Entity\n[状态机 / 动画 / Lerp]"]:::render
+        end
+        
+        GameManager -- "Token & UserID" --> WSClient
+        WSClient <--> Proto
+        Proto -- "State Snapshot" --> Main
+        Main -- "Dispatch Pos/State" --> Player
+        Player -- "Trigger Shake" --> Camera
+    end
+
+    subgraph Remote_Server ["☁️ Go Server"]
+        Gateway["Go WebSocket Gateway"]:::network
+    end
+
+    %% 跨域与网络链路
+    JSBridge == "Inject Auth" === GameManager
+    WSClient == "Binary Stream\n(Input / Snapshot)" === Gateway
+    Player -. "Input Polling" .-> WSClient
 ```
 
----
+## 🚀 核心工程化系统 (Core Systems)
 
-## ⚙️ Core Systems
+### 1\. 服务端权威与平滑插值 (Server-Authoritative Sync)
 
----
+  * **盲动与剥夺:** 客户端仅负责采集按键/虚拟摇杆的输入向量，不再修改本地的绝对坐标，所有位置均以 Go 后端下发的快照为准。
+  * **Lerp 平滑补偿:** 针对 60Hz 物理快照，使用 `MoveToward` 与 `Lerp` 算法进行视觉平滑。即使在网络抖动时，远端玩家的移动与转身 (RotY) 依然如丝般顺滑。
+  * **预测锁 (Prediction Lock):** 为解决网络延迟导致的“表现回扯”，引入 0.35s 预测锁。在本地预判受击的瞬间锁定状态，防止被旧网络快照强行打断击退表现。
 
-### ⚡ 1. Authoritative Server Architecture
+### 2\. 工业级打击感引擎 (Hardcore Game Feel)
 
-**权威服务器模型**
+  * **Hit-Stop (卡肉机制):** 采用精准的时间膨胀控制。普攻命中触发 `0.08s` 卡肉，互撞拼刀触发 `0.15s` 卡肉。命中瞬间引擎时间 (Engine TimeScale) 骤降至 `5%`，完美模拟刀刃入肉的阻力感。
+  * **动态镜头撕裂 (Screen Shake):** 根据受击强度与技能类型（普攻/大招），触发基于衰减算法的屏幕震动，强化视觉张力。
 
-```text
-Client → Input Only
-Server → Truth
+### 3\. 轻量级网络与序列化 (Lightweight Networking)
+
+  * **Zero-Dependency Protobuf:** 为了保证 WASM 包体的极简，**摒弃了臃肿的第三方插件**，自研 `ProtoParser.gd`。仅用几百行纯 GDScript 实现了 Protobuf 3 协议的二进制解码与编码，极致压榨带宽。
+
+### 4\. 跨平台交互适配 (Cross-Platform Input)
+
+  * **动态虚拟摇杆:** 自动嗅探运行环境，当检测到 Mobile 标识或触屏操作时，动态激活左下角/右下角的虚拟摇杆 (Virtual Joystick)，并根据设计分辨率自动重置锚点 (Anchors)，防止画面缩放导致 UI 偏移。
+
+## 📁 核心目录拓扑
+
+```plaintext
+AsterNova-Godot/
+├── assets/                     # 核心美术与音频资源
+│   ├── map_picture/            # 赛博珍珠白竞技场地图
+│   └── music/game/             # 池化音效资源 (Hit, Dash, Clash)
+├── proto/                      # Protobuf 协议定义 (game.proto)
+├── scene/                      # 实体与逻辑场景
+│   ├── group_camera/           # 多目标动态缩放相机逻辑
+│   ├── player/                 # 核心：战斗状态机与实体控制器
+│   └── roles/                  # 职业差异化继承 (如 Role1_Speedster)
+├── scripts/                    # 全局单例与单体控制脚本
+│   ├── AudioManager.gd         # 全局音频池管理器
+│   ├── BattleWsClient.gd       # WebSocket 网络长连接与粘包处理
+│   ├── GameManager.gd          # Wasm 与 React 的跨端交互总线
+│   └── ProtoParser.gd          # 🚀 自研轻量级 Protobuf 序列化器
+└── export_presets.cfg          # WebAssembly 导出配置矩阵
 ```
 
-* 客户端只发送：
+## 🛠️ 构建与导出指南 (Build & Export)
 
-  * WASD
-  * 鼠标
-  * 蓄力状态
+1.  **引擎要求:** 请使用 Godot `4.2+` 版本打开本工程。
+2.  **本地调试:** \* 由于强制了 Server-Authoritative 架构，独立运行客户端将无法移动。
+      * 必须确保 Go 后端网关 (`localhost:8081`) 处于运行状态，并在编辑器 `GameManager.gd` 中配置 Mock Token。
+3.  **导出 WebAssembly (WASM):**
+      * 点击 `项目 (Project)` -\> `导出 (Export)`。
+      * 选择 `Web` 预设。
+      * **导出路径必须指向:** `../asternova-web-client/public/godot/GoDot_game.html` (配合外层 Next.js 的静态托管)。
+      * *注意：导出时确保去除了 Debug 选项以获得最佳体积与性能。*
 
-* 服务器控制：
+-----
 
-  * HP
-  * 命中
-  * 位移
-  * 战斗结果
+*Forged in Godot. Designed for the browser. Built by **TimeCraker**.*
 
-✔ 防作弊
-✔ 强一致性
-✔ 可扩展多人同步
-
----
-
-### 🧠 2. Client Prediction Engine
-
-**客户端预测引擎（核心亮点）**
-
-```text
-Prediction Lock: 0.35s
-```
-
-#### 💥 Dash Clash 处理：
-
-1. 客户端立即预测击退
-2. 应用物理反馈
-3. 等待服务器校正
-
-```gdscript
-HIT_STUN_FRICTION = 8.0
-```
-
-👉 指数阻尼实现“丝滑击退”
-👉 几乎 0 延迟手感
-
----
-
-### 📦 3. Pure GDScript Protobuf
-
-**零依赖协议解析**
-
-```text
-ProtoParser.gd
-```
-
-* 手写 Protobuf 解码器
-* 支持 60Hz Snapshot
-* 无第三方库
-
-✔ 更高性能
-✔ 完全可控
-
----
-
-### 🌐 4. JSBridge Integration
-
-**Web ↔ Game 引擎桥接**
-
-#### 输入（React → Godot）
-
-```js
-window.enterBattle(jwt, roomId)
-```
-
-#### 输出（Godot → React）
-
-* 战斗状态
-* UI 事件
-* 结算结果
-
-👉 实现 Web + 游戏引擎融合
-
----
-
-## 🧱 Engine Structure
-
-```bash
-AsterNova/
-├── scene/
-│   └── player/
-│       └── player.gd       # 核心战斗逻辑
-│
-├── scripts/
-│   ├── BattleWsClient.gd   # WebSocket层
-│   ├── GameManager.gd      # 全局控制
-│   └── ProtoParser.gd      # Protobuf解析
-```
-
----
-
-### 🔥 player.gd（核心模块）
-
-* 双轨系统：
-
-  * 本地预测
-  * 服务端同步
-
-* 命中检测：
-
-```gdscript
-distance_to <= 60.0
-```
-
----
-
-## 🎨 Visual Identity
-
-> Cyber · Elegant · Minimal Combat UI
-
-* 🌸 粉 → 紫 渐变光效
-* ⚡ 动态粒子 + 残影
-* 🌌 轻量 UI + 高级质感
-
----
-
-## 🧩 Tech Stack
-
-| Layer    | Tech               |
-| -------- | ------------------ |
-| Engine   | Godot 4.x          |
-| Frontend | React              |
-| Backend  | Go (Microservices) |
-| Network  | WebSocket          |
-| Protocol | Protobuf           |
-| Bridge   | JavaScriptBridge   |
-
----
-
-## 🚀 Why This Project Matters
-
-这是一个**非常不常见的架构组合**：
-
-### ❌ 传统方式
-
-* Unity / Godot = 完整客户端
-* 前端只是壳
-
-### ✅ AsterNova 方式
-
-* Web = 主入口
-* Godot = 战斗引擎插件
-* Backend = 绝对权威
-
----
-
-### 💥 优势
-
-* 可嵌入网页（类似小游戏平台）
-* 天然支持账号系统
-* 易扩展多人对战
-* 强安全性
-
----
-
-## 🧠 Design Philosophy
-
-> “The client renders reality.
-> The server defines reality.”
-
----
-
-* 🎮 手感优先，但不牺牲公平
-* ⚖️ 一致性 > 表现一致
-* ⚡ 延迟可隐藏，但逻辑必须真实
-
----
-
-## 📈 Future Roadmap
-
-* [ ] 帧同步优化（Rollback Netcode）
-* [ ] 技能系统扩展
-* [ ] 多角色支持
-* [ ] Matchmaking 服务
-* [ ] Spectator Mode（观战）
-
-
-
-## ⭐ Final Note
-
-> This is not just a game client.
-> It is a **reusable real-time combat engine for the web.**
-
----
-
-
+-----

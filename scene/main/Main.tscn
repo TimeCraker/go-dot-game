@@ -9,6 +9,7 @@
 script = ExtResource("1_ngnri")
 
 [node name="Map_Arena" parent="." unique_id=648806103 instance=ExtResource("2_kxuim")]
+position = Vector2(-512, -504)
 
 [node name="GroupCamera" parent="." unique_id=98295495 instance=ExtResource("3_62xol")]
 
@@ -19,10 +20,8 @@ layer = 128
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_left = -457.0
-offset_top = -471.0
-offset_right = -257.0
-offset_bottom = -271.0
+offset_top = -200.0
+offset_right = 200.0
 grow_vertical = 0
 dynamic_area_top_margin = 0.5
 dynamic_area_right_margin = 0.45
@@ -34,10 +33,8 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -832.0
-offset_top = -483.0
-offset_right = -632.0
-offset_bottom = -283.0
+offset_left = -200.0
+offset_top = -200.0
 grow_horizontal = 0
 grow_vertical = 0
 dynamic_area_left_margin = 0.55

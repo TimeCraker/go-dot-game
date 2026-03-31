@@ -15,6 +15,26 @@ var peer: WebSocketPeer = WebSocketPeer.new()
 var _last_state: int = WebSocketPeer.STATE_CLOSED
 # ===== 新增代码 END =====
 
+func _resolve_ws_base(raw_ws_base: String) -> String:
+	# 优先使用前端注入（Web 线上/联调主路径）
+	var from_frontend := raw_ws_base.strip_edges()
+	if not from_frontend.is_empty():
+		return from_frontend
+
+	# Web 导出兜底：基于当前页面域名自动拼接 ws/wss
+	if OS.has_feature("web"):
+		var protocol := "ws://"
+		var host := ""
+		var is_https = JavaScriptBridge.eval("window.location.protocol === 'https:'")
+		if bool(is_https):
+			protocol = "wss://"
+		host = str(JavaScriptBridge.eval("window.location.host"))
+		if not host.is_empty():
+			return protocol + host + "/ws"
+
+	# 本地 Godot 编辑器运行兜底
+	return "ws://127.0.0.1:8081/ws"
+
 func connect_to_server() -> void:
 	# ===== 新增代码 START =====
 	# 修改内容：从 GameManager 读取参数并拼接网关 URL
@@ -27,11 +47,7 @@ func connect_to_server() -> void:
 	var gm := get_node("/root/GameManager")
 	var token: String = str(gm.token)
 	var room_id: String = str(gm.room_id)
-	var ws_base: String = str(gm.ws_base)
-
-	if ws_base.is_empty():
-		push_error("[BattleWsClient] ws_base 为空，无法连接")
-		return
+	var ws_base: String = _resolve_ws_base(str(gm.ws_base))
 
 	var separator := "?"
 	if ws_base.find("?") != -1:

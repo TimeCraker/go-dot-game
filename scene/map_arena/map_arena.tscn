@@ -1,8 +1,17 @@
 [gd_scene format=3 uid="uid://cs1dqywx0su7k"]
 
-[ext_resource type="Texture2D" uid="uid://dgmarf0u0u5ub" path="res://assets/map_picture/game_map.png" id="1_apqem"]
+[ext_resource type="Texture2D" uid="uid://dm8jkv44yo3gf" path="res://assets/map_picture/arena_map_v2.jpg" id="1_r8d51"]
 
 [node name="Map_Arena" type="Node2D" unique_id=648806103]
 
-[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1634431794]
-texture = ExtResource("1_apqem")
+[node name="TextureRect" type="TextureRect" parent="." unique_id=1665566788]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+offset_top = -1.0
+offset_right = 1023.0
+offset_bottom = 1023.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1_r8d51")
